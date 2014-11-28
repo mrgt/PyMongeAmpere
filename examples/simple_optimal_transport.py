@@ -1,6 +1,6 @@
 import pdb
 import sys
-sys.path.append('lib/');
+sys.path.append('../lib/');
 
 import MongeAmpere as ma
 import numpy as np

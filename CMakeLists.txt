@@ -91,7 +91,7 @@ function (create_symlinks)
     endforeach(path_file)
 endfunction(create_symlinks)
 
-set(python_files test.py)
+set(python_files examples/simple_optimal_transport.py)
 create_symlinks(${python_files})
 
 ADD_LIBRARY(MongeAmpere MODULE MongeAmpere.cpp)
