@@ -238,7 +238,7 @@ solve_spqr(const p::object &ph,
   return pr;
 }
 
-BOOST_PYTHON_MODULE(MApp)
+BOOST_PYTHON_MODULE(MongeAmpere)
 {
   np::initialize();
   p::class_<Density>
