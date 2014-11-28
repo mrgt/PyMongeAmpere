@@ -7,6 +7,64 @@ import numpy as np
 import scipy as sp
 import scipy.optimize as opt
 
+def kantorovich(dens,Y,nu,w):
+    [f,m,h] = ma.kantorovich(dens, Y, w);
+    # compute the linear part of the optimal transport functional
+    # and update the gradient accordingly
+    f = f - np.dot(w,nu);
+    g = m - nu;
+    H = sp.sparse.csr_matrix(h,shape=(N,N))
+    return f,m,g,H;
+
+
+def solve_graph_laplacian(H,g):
+    N = len(g);
+    Hs = H[0:(N-1),0:(N-1)]
+    gs = g[0:N-1]
+    ds = sp.sparse.linalg.spsolve(Hs,gs);
+    d = np.hstack((ds,[0]));
+    return d;
+
+def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7, maxit=100):
+    # if no initial guess is provided, start with zero, and compute
+    # function value, gradient and hessian
+    N = Y.shape[0];
+    if len(w0) == N:
+        w = w0;
+    else:
+        w = np.zeros(N);
+    [f,m,g,H] = kantorovich(dens, Y, nu, w);
+
+    # we impose a minimum weighted area for Laguerre cells during the
+    # execution of the algorithm:
+    # eps0 = min(minimum of cells areas at beginning,
+    #           minimum of target areas).
+    eps0 = min(min(m),min(nu))/2;
+    it = 0;
+
+    print eps0
+    while (np.linalg.norm(g) > eps_g and it <= maxit):
+        d = solve_graph_laplacian(H,-g)
+
+        # choose the step length by a simple backtracking, ensuring
+        # the invertibility (up to the invariance under the addition
+        # of a constant) of the hessian at the next point
+        alpha = 1;
+        w0 = w;
+        n0 = np.linalg.norm(g);
+        nlinesearch = 0;
+        while True:
+            w = w0 + alpha * d;
+            [f,m,g,H] = kantorovich(dens, Y, nu, w);
+            if (min(m) >= eps0 and
+                np.linalg.norm(g) <= (1-alpha/2)*n0):
+                break;
+            alpha *= .5;
+        print ("it %d: f=%g |g|=%g t=%g"
+               % (it, f,np.linalg.norm(g),alpha));
+        it = it+1;
+    return w
+
 # source: uniform measure on the square with sidelength 2
 X = np.array([[-1,-1],
               [1, -1],
@@ -16,92 +74,13 @@ mu = np.ones(4)/4;
 dens = ma.Density(X,mu);
 
 # target is a random set of points, with random weights
-N = 10000;
-Y = np.random.rand(N,2);
-#nu = 10+np.random.rand(N);
-nu = np.ones(N);
+N = 50000;
+Y = np.random.rand(N,2)/2;
+nu = 10+np.random.rand(N);
 nu = (dens.mass() / np.sum(nu)) * nu;
 
 # print "mass(nu) = %f" % sum(nu)
 # print "mass(mu) = %f" % dens.mass()
 
 # 
-eps_g = 1e-7;
-maxit = 1000;
-
-if False:
-    I = np.array([0,1,2,2]);
-    J = np.array([0,1,1,2]);
-    S = np.array([.1,.3,.1,.4]);
-    h = sp.sparse.coo_matrix((S, (I,J)), shape=(3,3));
-    b = np.array([.1,.1,3]);
-    dd = ma.solve_spqr(h,b);
-    d = sp.sparse.linalg.lsqr(h,b)[0];
-    print d
-    print dd
-    sys.exit(0)
-
-def newton(f, x):
-    fe = lambda x: f(x)[0];  # function evaluation only
-    fp = lambda x: f(x)[1];  # gradient evaluation
-
-    for it in xrange(1,100):
-        [fval,grad,hess] = f(x);
-        ng = np.linalg.norm(grad);
-        if ng < eps_g:
-            break
-        #d = ma.solve_spqr(hess,-grad);
-        d = -sp.sparse.linalg.lsqr(hess,grad)[0];
-        print d
-        t = sp.optimize.line_search(fe, fp, x, d, grad, fval)[0];
-        x = x + t*d;
-        print "it %d: f=%f |g|=%f t=%f" % (it, fval, ng, t)
-
-def optimal_transport_functional(dens,Y,nu,w):
-    [f,g,h] = ma.kantorovich(dens, Y, w);
-    # compute the linear part of the optimal transport functional
-    # and update the gradient accordingly
-    f = f - np.dot(w,nu);
-    g = g - nu;
-    H = sp.sparse.coo_matrix(h,shape=(N,N))
-    np.dot(H,-g)
-    return f,g,H;
-
-# w = np.zeros(N);
-# newton(lambda w: optimal_transport_functional(dens,Y,nu,w), w);
-
-w = np.zeros(N);
-for it in xrange(0,maxit):
-    [f,g,h] = ma.kantorovich(dens, Y, w);
-
-    # compute the linear part of the optimal transport functional
-    # and update the gradient accordingly
-    f = f - np.dot(w,nu);
-    g = g - nu;
-
-    H = sp.sparse.coo_matrix(h,shape=(N,N))
-    d = ma.solve_spqr(H,-g)
-    #d = sp.sparse.linalg.lsqr(H,-g,atol=0,btol=0,conlim=0)[0]
-    ng = np.linalg.norm(g);
-
-    if ng < eps_g:
-        break
-
-    # find suitable stepsize
-    t = 1.;
-    found = False;
-    for i in xrange(0,10):
-        ww = w + t*d;
-        gg = ma.kantorovich(dens,Y,ww)[1];
-        if np.amin(gg) > 1e-9:
-            found = True;
-            break
-        # try smaller stepsize
-        t = t/2 
-    print "it %d: f=%f |g|=%f t=%f" % (it, f, ng, t)
-    w = ww
-
-print np.linalg.norm(g)
-
-
-
+optimal_transport_2(dens,Y,nu)
