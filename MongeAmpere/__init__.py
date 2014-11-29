@@ -1,14 +1,15 @@
-import pdb
 import sys
 sys.path.append('../lib/');
 
-import MongeAmpere as ma
+import MongeAmperePP as ma
 import numpy as np
 import scipy as sp
 import scipy.optimize as opt
+from MongeAmperePP import Density_2, lloyd_2, delaunay_2
 
-def kantorovich(dens,Y,nu,w):
-    [f,m,h] = ma.kantorovich(dens, Y, w);
+def kantorovich_2(dens,Y,nu,w):
+    N = len(nu);
+    [f,m,h] = ma.kantorovich_2(dens, Y, w);
     # compute the linear part of the optimal transport functional
     # and update the gradient accordingly
     f = f - np.dot(w,nu);
@@ -17,6 +18,10 @@ def kantorovich(dens,Y,nu,w):
     return f,m,g,H;
 
 
+# The hessian of Kantorovich's functional is not invertible, because
+# its kernel contains constant vectors. Removing the last line and
+# column of the matrix before performing the resolution of the linear
+# system solves this issue.
 def solve_graph_laplacian(H,g):
     N = len(g);
     Hs = H[0:(N-1),0:(N-1)]
@@ -33,7 +38,7 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7, maxit=100):
         w = w0;
     else:
         w = np.zeros(N);
-    [f,m,g,H] = kantorovich(dens, Y, nu, w);
+    [f,m,g,H] = kantorovich_2(dens, Y, nu, w);
 
     # we impose a minimum weighted area for Laguerre cells during the
     # execution of the algorithm:
@@ -55,7 +60,7 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7, maxit=100):
         nlinesearch = 0;
         while True:
             w = w0 + alpha * d;
-            [f,m,g,H] = kantorovich(dens, Y, nu, w);
+            [f,m,g,H] = kantorovich_2(dens, Y, nu, w);
             if (min(m) >= eps0 and
                 np.linalg.norm(g) <= (1-alpha/2)*n0):
                 break;
@@ -64,23 +69,3 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7, maxit=100):
                % (it, f,np.linalg.norm(g),alpha));
         it = it+1;
     return w
-
-# source: uniform measure on the square with sidelength 2
-X = np.array([[-1,-1],
-              [1, -1],
-              [1, 1],
-              [-1,1]], dtype=float);
-mu = np.ones(4)/4;
-dens = ma.Density(X,mu);
-
-# target is a random set of points, with random weights
-N = 50000;
-Y = np.random.rand(N,2)/2;
-nu = 10+np.random.rand(N);
-nu = (dens.mass() / np.sum(nu)) * nu;
-
-# print "mass(nu) = %f" % sum(nu)
-# print "mass(mu) = %f" % dens.mass()
-
-# 
-optimal_transport_2(dens,Y,nu)
