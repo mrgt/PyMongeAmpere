@@ -5,7 +5,50 @@ import MongeAmperePP as ma
 import numpy as np
 import scipy as sp
 import scipy.optimize as opt
-from MongeAmperePP import Density_2, lloyd_2, delaunay_2
+
+def delaunay_2(X,w=None):
+    if w==None:
+        w = np.zeros(X.shape[0]);
+    return ma.delaunay_2(X,w);
+
+def lloyd_2(dens,X,w=None):
+    if w==None:
+        w = np.zeros(X.shape[0]);
+    return ma.lloyd_2(dens,X,w);
+
+class Density_2 (ma.Density_2):
+    def __init__(self, X, f=None, T=None):
+        # by default, the density is uniform over the convex hull of X
+        if f == None:
+            f = np.ones(X.shape[0])
+        if T == None:
+            T = delaunay_2(X)
+        ma.Density_2.__init__(self, X,f,T);
+        
+    def optimized_sampling(self, N, niter=1,verbose=False):
+        """
+        This functions constructs an optimized sampling of the density,
+        combining semi-discrete optimal transport to determine the size
+        of Voronoi cells with Lloyd's algorithm to relocate the points
+        at the centroids.
+        
+        See: Blue Noise through Optimal Transport
+             de Goes, Breeden, Ostromoukhov, Desbrun
+             ACM Transactions on Graphics 31(6)
+        """
+        Y = self.random_sampling(N);
+        nu = np.ones(N);
+        nu = (self.mass() / np.sum(nu)) * nu;
+        
+        w = np.zeros(N);
+        for i in xrange(1,5):
+            Y = lloyd_2(self, Y, w)[0];
+        for i in xrange(0,niter):
+            if verbose:
+                print "optimized_sampling, step %d" % (i+1)
+            w = optimal_transport_2(self,Y,nu,verbose=verbose);
+            Y = lloyd_2(self, Y, w)[0];
+        return Y
 
 def kantorovich_2(dens,Y,nu,w):
     N = len(nu);
@@ -30,7 +73,8 @@ def solve_graph_laplacian(H,g):
     d = np.hstack((ds,[0]));
     return d;
 
-def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7, maxit=100):
+def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
+                        maxit=100, verbose=False):
     # if no initial guess is provided, start with zero, and compute
     # function value, gradient and hessian
     N = Y.shape[0];
@@ -47,7 +91,7 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7, maxit=100):
     eps0 = min(min(m),min(nu))/2;
     it = 0;
 
-    print eps0
+    assert (eps0 >= 1e-10);
     while (np.linalg.norm(g) > eps_g and it <= maxit):
         d = solve_graph_laplacian(H,-g)
 
@@ -65,7 +109,8 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7, maxit=100):
                 np.linalg.norm(g) <= (1-alpha/2)*n0):
                 break;
             alpha *= .5;
-        print ("it %d: f=%g |g|=%g t=%g"
-               % (it, f,np.linalg.norm(g),alpha));
+        if verbose:
+            print ("it %d: f=%g |g|=%g t=%g"
+                   % (it, f,np.linalg.norm(g),alpha));
         it = it+1;
     return w

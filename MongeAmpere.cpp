@@ -79,12 +79,53 @@ python_to_vector(const np::ndarray &array)
      array.shape(0), DynamicStride(0,s0));
 }
 
+inline double rand01()
+{ return rand()/(double(RAND_MAX)+1); }
+
 class Density_2
 {
 public:
   T _t;
   typedef MA::Linear_function<K> Function;
   std::map<T::Face_handle, Function> _functions;
+
+    
+  struct Triangle
+  {
+  public:
+    Point a, b, c;
+    Triangle (const Point &aa, const Point &bb, const Point &cc) :
+      a(aa), b(bb), c(cc) {}
+    Point rand() const
+    {
+      double r1 = sqrt(rand01()), r2 = rand01();
+      return  CGAL::ORIGIN + ((1 - r1) * (a-CGAL::ORIGIN)  +
+			      (r1 * (1 - r2)) * (b-CGAL::ORIGIN) +
+			      (r1 * r2) * (c-CGAL::ORIGIN));
+    }
+  };
+
+  void 
+  compute_cum_masses(std::vector<Triangle> &triangles,
+		     std::vector<double> &cumareas)
+  {
+    double ta = 0.0;
+    cumareas.clear();
+    triangles.clear();
+    for (T::Finite_faces_iterator it = _t.finite_faces_begin ();
+	 it != _t.finite_faces_end(); ++it)
+      {
+	triangles.push_back(Triangle(it->vertex(0)->point(),
+				     it->vertex(1)->point(),
+				     it->vertex(2)->point()));
+	ta += MA::integrate_centroid(it->vertex(0)->point(),
+				     it->vertex(1)->point(),
+				     it->vertex(2)->point(),
+				     _functions[it]);
+	cumareas.push_back(ta);
+      }
+  }
+
   
 public:
   Density_2(const np::ndarray &npX, 
@@ -151,7 +192,30 @@ public:
       }
     return total;
   }
-    
+
+  np::ndarray random_sampling (int N)
+  {
+    std::vector<Triangle> triangles;
+    std::vector<double> cumareas;
+    compute_cum_masses(triangles, cumareas);
+
+    auto pX = np::zeros(p::make_tuple(N,3),
+		       np::dtype::get_builtin<double>());
+    auto X = python_to_matrix<double>(pX);
+
+    double ta = cumareas.back();    
+    for (size_t i = 0; i < N; ++i)
+      {
+	double r = rand01() * ta;
+	size_t n = (std::lower_bound(cumareas.begin(),
+				     cumareas.end(), r) -
+		    cumareas.begin());
+	Point p = triangles[n].rand();
+	X(i,0) = p.x();
+	X(i,1) = p.y();
+      }
+    return pX;
+  }    
 };
 
 p::tuple
@@ -357,7 +421,8 @@ BOOST_PYTHON_MODULE(MongeAmperePP)
     ("Density_2",
        p::init<const np::ndarray &,const np::ndarray&,
 	       const np::ndarray&>())
-    .def("mass", &Density_2::mass);
+    .def("mass", &Density_2::mass)
+    .def("random_sampling", &Density_2::random_sampling);
   p::def("kantorovich_2", &kantorovich_2);
   p::def("lloyd_2", &lloyd_2);
   p::def("delaunay_2", &delaunay_2);
