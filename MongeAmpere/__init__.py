@@ -1,5 +1,5 @@
 # PyMongeAmpere
-# Copyright (C) 2014 Quentin Mérigot, CNRS
+# Copyright (C) 2014 Quentin Merigot, CNRS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
@@ -37,6 +37,21 @@ class Density_2 (ma.Density_2):
         if T == None:
             T = delaunay_2(X)
         ma.Density_2.__init__(self, X,f,T);
+
+    @classmethod
+    def from_image(cls,im,bbox=None):
+        if bbox==None:
+            bbox = [-1,1,-1,1];
+        w = im.shape[0];
+        h = im.shape[1];
+        [x,y] = np.meshgrid(np.linspace(bbox[0],bbox[1],w),
+                            np.linspace(bbox[2],bbox[3],h));
+        Nx = w*h;
+        x = np.reshape(x,(Nx));
+        y = np.reshape(y,(Nx));
+        X = np.vstack([x,y]).T;
+        return cls(X,np.reshape(im,(Nx)))
+
         
     def optimized_sampling(self, N, niter=1,verbose=False):
         """

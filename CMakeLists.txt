@@ -17,7 +17,9 @@ INCLUDE_DIRECTORIES("${Boost_INCLUDE_DIRS}")
 ADD_DEFINITIONS(-std=c++11 -pg)
 
 # monge-ampere
-set(MONGE_AMPERE_DIR ${PyMongeAmpere_SOURCE_DIR}/../voronoi_intersection)
+find_path(MONGE_AMPERE_DIR include/MA/voronoi_triangulation_intersection.hpp
+          HINTS ${PyMongeAmpere_SOURCE_DIR}/../MongeAmpere)
+message(${MONGE_AMPERE_DIR})
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${MONGE_AMPERE_DIR}/cmake)
 INCLUDE_DIRECTORIES(${MONGE_AMPERE_DIR}/include)
 
