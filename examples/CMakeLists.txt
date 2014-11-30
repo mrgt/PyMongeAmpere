@@ -34,5 +34,5 @@ function (create_symlinks)
     endforeach(path_file)
 endfunction(create_symlinks)
 
-set(python_files optimal_transport.py lloyd.py delaunay.py bluenoise.py)
+set(python_files optimal_transport.py lloyd.py delaunay.py bluenoise.py sample_disk.py)
 create_symlinks(${python_files})
