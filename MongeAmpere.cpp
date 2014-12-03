@@ -359,20 +359,6 @@ lloyd_2(const Density_2 &pl,
   return p::make_tuple(pc, pm);
 }
 
-#ifdef MA_USE_SUITESPARSE_QR
-
-#undef Success
-// Suitesparse 4.3.1 does not define UF_long, which is expected by the
-// Eigen wrapper classes
-#include <cs.h>
-#ifndef UF_long
-#define  UF_long cs_long_t
-#endif
-#include <Eigen/SPQRSupport>
-
-#endif
-
-
 void python_to_sparse (const p::object &ph,
 		       SparseMatrix &h)
 {
@@ -404,29 +390,6 @@ void python_to_sparse (const p::object &ph,
   h.makeCompressed();
 }
 
-#ifdef MA_USE_SUITESPARSE_QR
-np::ndarray
-solve_spqr(const p::object &ph,
-	   np::ndarray &pb)
-{
-  SparseMatrix h; python_to_sparse(ph,h);
-  VectorXd b = python_to_vector<double>(pb);
-  assert(b.rows() == h.rows());
-
-  // solve
-  Eigen::SPQR<SparseMatrix> solver(h);
-  VectorXd r = solver.solve(b);
-  assert(r.rows() == h.cols());
-
-  // return result
-  auto pr = np::zeros(p::make_tuple(r.rows()),
-		      np::dtype::get_builtin<double>());
-  for (size_t i = 0; i < r.rows(); ++i)
-    pr[i] = r[i];
-  return pr;
-}
-#endif
-
 BOOST_PYTHON_MODULE(MongeAmperePP)
 {
   np::initialize();
@@ -439,7 +402,4 @@ BOOST_PYTHON_MODULE(MongeAmperePP)
   p::def("kantorovich_2", &kantorovich_2);
   p::def("lloyd_2", &lloyd_2);
   p::def("delaunay_2", &delaunay_2);
-#ifdef MA_USE_SUITESPARSE_QR
-  p::def("solve_spqr", &solve_spqr);
-#endif
 }

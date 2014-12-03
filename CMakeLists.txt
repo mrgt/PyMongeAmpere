@@ -17,9 +17,18 @@ INCLUDE_DIRECTORIES("${Boost_INCLUDE_DIRS}")
 ADD_DEFINITIONS(-std=c++11 -pg)
 
 # monge-ampere
-find_path(MONGE_AMPERE_DIR include/MA/voronoi_triangulation_intersection.hpp
-          HINTS ${PyMongeAmpere_SOURCE_DIR}/../MongeAmpere)
-message(${MONGE_AMPERE_DIR})
+LIST(APPEND MONGE_AMPERE_CHECK_INCLUDE_DIRS
+  ${PyMongeAmpere_SOURCE_DIR}/../MongeAmpere
+  ${MA_DIR})
+
+find_path(MONGE_AMPERE_DIR NAMES include/MA/quadrature.hpp
+  PATHS ${MONGE_AMPERE_CHECK_INCLUDE_DIRS})
+IF (EXISTS ${MONGE_AMPERE_DIR})
+  MESSAGE(STATUS "Found MongeAmpere++ header in: ${MONGE_AMPERE_DIR}")
+ELSE()
+  MESSAGE(FATAL_ERROR "MongeAmpere++ not found (MA_DIR=${MA_DIR}).")
+ENDIF()
+
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${MONGE_AMPERE_DIR}/cmake)
 INCLUDE_DIRECTORIES(${MONGE_AMPERE_DIR}/include)
 
@@ -42,20 +51,24 @@ find_package( CGAL QUIET COMPONENTS)
 include( ${CGAL_USE_FILE} )
 LINK_LIBRARIES(${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES} )
 
-# SuiteSparse (optional)
-find_package(SuiteSparse)
-include_directories(${SUITESPARSE_INCLUDE_DIRS})
-link_libraries(${SUITESPARSE_LIBRARIES})
-if(SUITESPARSEQR_FOUND)
-  add_definitions(-DMA_USE_SUITESPARSE_QR)
-endif()
+# # SuiteSparse (optional)
+# find_package(SuiteSparse)
+# include_directories(${SUITESPARSE_INCLUDE_DIRS})
+# link_libraries(${SUITESPARSE_LIBRARIES})
+
+# if(SUITESPARSE_FOUND)
+#   add_definitions(-DMA_USE_SUITESPARSE)
+# endif()
+# if(SUITESPARSEQR_FOUND)
+#   add_definitions(-DMA_USE_SUITESPARSE_QR)
+# endif()
 
 # Intel TBB (optional)
-find_package(TBB)
-if(TBB_FOUND)
-  include_directories(${TBB_INCLUDE_DIRS})
-  link_libraries(${TBB_LIBRARIES})
-endif()
+# find_package(TBB)
+# if(TBB_FOUND)
+#   include_directories(${TBB_INCLUDE_DIRS})
+#   link_libraries(${TBB_LIBRARIES})
+# endif()
 
 ADD_LIBRARY(MongeAmperePP MODULE MongeAmpere.cpp)
 SET_TARGET_PROPERTIES(MongeAmperePP PROPERTIES PREFIX "")
