@@ -18,6 +18,7 @@ import MongeAmperePP as ma
 import numpy as np
 import scipy as sp
 import scipy.optimize as opt
+#from scikits.sparse.cholmod import cholesky
 
 def delaunay_2(X,w=None):
     if w==None:
@@ -97,7 +98,8 @@ def solve_graph_laplacian(H,g):
     N = len(g);
     Hs = H[0:(N-1),0:(N-1)]
     gs = g[0:N-1]
-    ds = sp.sparse.linalg.spsolve(Hs,gs);
+    # solve the linear system Hs*ds = gs using a Cholesky decomposition
+    ds = ma.solve_cholesky(Hs.tocoo(),gs);
     d = np.hstack((ds,[0]));
     return d;
 

@@ -390,6 +390,29 @@ void python_to_sparse (const p::object &ph,
   h.makeCompressed();
 }
 
+// This function solves a linear system using a Cholesky
+// decomposition. This implementation seems faster and more robust
+// than scipy's spsolve.
+np::ndarray
+solve_cholesky(const p::object &ph,
+	       np::ndarray &pb)
+{
+  SparseMatrix h; python_to_sparse(ph,h);
+  VectorXd b = python_to_vector<double>(pb);
+  assert(b.rows() == h.rows());
+
+  Eigen::SimplicialLLT<SparseMatrix> solver(h);
+  VectorXd r = solver.solve(b);
+  assert(r.rows() == h.cols());
+  
+  auto pr = np::zeros(p::make_tuple(r.rows()),
+		      np::dtype::get_builtin<double>());
+  for (size_t i = 0; i < r.rows(); ++i)
+    pr[i] = r[i];
+  return pr;
+}
+
+
 BOOST_PYTHON_MODULE(MongeAmperePP)
 {
   np::initialize();
@@ -402,4 +425,5 @@ BOOST_PYTHON_MODULE(MongeAmperePP)
   p::def("kantorovich_2", &kantorovich_2);
   p::def("lloyd_2", &lloyd_2);
   p::def("delaunay_2", &delaunay_2);
+  p::def("solve_cholesky", &solve_cholesky);
 }
