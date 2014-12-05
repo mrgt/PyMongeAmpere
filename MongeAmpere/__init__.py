@@ -12,13 +12,13 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import sys
-sys.path.append('../lib/');
+import os
+sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../lib/');
 
 import MongeAmperePP as ma
 import numpy as np
 import scipy as sp
 import scipy.optimize as opt
-#from scikits.sparse.cholmod import cholesky
 
 def delaunay_2(X,w=None):
     if w==None:
@@ -32,6 +32,22 @@ def lloyd_2(dens,X,w=None):
 
 class Density_2 (ma.Density_2):
     def __init__(self, X, f=None, T=None):
+        """
+        This function creates a density which is piecewise linear on the
+        triangulation T of X, and whose values at the vertices X is
+        given by f. If f is not given, it is assumed to be constant
+        and equal to one. If the triangulation is missing, the
+        Delaunay triangulation of X is used. In particular, if only X
+        is provided, the density is uniform on the convex hull of X
+        (and vanishes outside this convex hull).
+
+        Args: 
+            X(array): input points, described by a Nx2 array
+            f(array): values of the density at X, described by a Nx1 array (optional)
+            T(array): triangulation of X, described by a Nx3 array of integers,
+                      corresponding to row indices in X.
+        """
+
         # by default, the density is uniform over the convex hull of X
         if f == None:
             f = np.ones(X.shape[0])
@@ -60,10 +76,19 @@ class Density_2 (ma.Density_2):
         combining semi-discrete optimal transport to determine the size
         of Voronoi cells with Lloyd's algorithm to relocate the points
         at the centroids.
-        
+
         See: Blue Noise through Optimal Transport
              de Goes, Breeden, Ostromoukhov, Desbrun
              ACM Transactions on Graphics 31(6)
+
+        Args:
+            N: number of points in the constructed sample
+            niter: number of iterations of optimal transport (default at 1)
+            verbose: display informations on the iterations
+
+        Returns:
+            A numpy array with N rows and 2 columns containing the coordinates of
+            the optimized sample points.
         """
         Y = self.random_sampling(N);
         nu = np.ones(N);
@@ -121,7 +146,26 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
     eps0 = min(min(m),min(nu))/2;
     it = 0;
 
-    assert (eps0 >= 1e-10);
+    # check that eps0 is not zero, in which case the damped Newton
+    # algorithm won't converges (the Hessian is non-invertible)
+    assert (eps0 > 0);
+    if eps0 <= 0:
+        if min(m) <= 0:
+            ii = np.argmin();
+            raise ValueError("optimal_transport_2: minimum cell area is zero; "
+                             "this is because the cell %d corresponding to the "
+                             " point (%g,%g) is empty" %
+                             (ii, Y[ii,0], Y[ii,1]));
+        else: # in this case min(mu) == 0
+            ii = np.argmin();
+            raise ValueError("optimal_transport_2: minimum cell area is zero; "
+                             "this is because the target cell masses vanishes, nu[%d] == 0" % ii);
+
+    # warn the user if the smallest cell has a mass close to zero, as
+    # it will likely lead to numerical instabilities.
+    if eps0 < 1e-10:
+        print ("optimal_transport_2: minimum cell area is small eps0=%g\n", eps0)
+
     while (np.linalg.norm(g) > eps_g and it <= maxit):
         d = solve_graph_laplacian(H,-g)
 
@@ -132,6 +176,7 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
         w0 = w;
         n0 = np.linalg.norm(g);
         nlinesearch = 0;
+
         while True:
             w = w0 + alpha * d;
             [f,m,g,H] = kantorovich_2(dens, Y, nu, w);
