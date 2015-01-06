@@ -57,22 +57,29 @@ class Density_2 (ma.Density_2):
 
     @classmethod
     def from_image(cls,im,bbox=None):
+    	"""
+    	This function constructs a density from an image. 
+    	
+    	Args:
+    		im: source image
+    		bbox: box containing the points
+    	"""
         if bbox==None:
             bbox = [-1,1,-1,1];
-        w = im.shape[0];
-        h = im.shape[1];
+        h = im.shape[0];
+        w = im.shape[1];
         [x,y] = np.meshgrid(np.linspace(bbox[0],bbox[1],w),
                             np.linspace(bbox[2],bbox[3],h));
         Nx = w*h;
         x = np.reshape(x,(Nx));
         y = np.reshape(y,(Nx));
-        X = np.vstack([x,y]).T;
-        return cls(X,np.reshape(im,(Nx)))
+        z = np.reshape(im,(Nx));
+        return cls(np.vstack([x,y]).T,z)
 
         
     def optimized_sampling(self, N, niter=1,verbose=False):
         """
-        This functions constructs an optimized sampling of the density,
+        This function constructs an optimized sampling of the density,
         combining semi-discrete optimal transport to determine the size
         of Voronoi cells with Lloyd's algorithm to relocate the points
         at the centroids.
