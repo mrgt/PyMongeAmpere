@@ -14,19 +14,19 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../lib/');
-
 import MongeAmperePP as ma
 import numpy as np
 import scipy as sp
 import scipy.optimize as opt
 
+
 def delaunay_2(X,w=None):
-    if w==None:
+    if w is None:
         w = np.zeros(X.shape[0]);
     return ma.delaunay_2(X,w);
 
 def lloyd_2(dens,X,w=None):
-    if w==None:
+    if w is None:
         w = np.zeros(X.shape[0]);
     return ma.lloyd_2(dens,X,w);
 
@@ -49,9 +49,9 @@ class Density_2 (ma.Density_2):
         """
 
         # by default, the density is uniform over the convex hull of X
-        if f == None:
+        if f is None:
             f = np.ones(X.shape[0])
-        if T == None:
+        if T is None:
             T = delaunay_2(X)
         ma.Density_2.__init__(self, X,f,T);
 
@@ -64,7 +64,7 @@ class Density_2 (ma.Density_2):
     		im: source image
     		bbox: box containing the points
     	"""
-        if bbox==None:
+        if bbox is None:
             bbox = [-1,1,-1,1];
         h = im.shape[0];
         w = im.shape[1];
