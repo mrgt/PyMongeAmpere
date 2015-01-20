@@ -25,9 +25,20 @@ import scipy.optimize as opt
 import matplotlib.pyplot as plt
 
 def delaunay_2(X,w=None):
-    if w==None:
+    if w is None:
         w = np.zeros(X.shape[0]);
     return ma.delaunay_2(X,w);
+
+
+def kantorovich_2(dens,Y,nu,w):
+    N = len(nu);
+    [f,m,h] = ma.kantorovich_2(dens, Y, w);
+    # compute the linear part of the optimal transport functional
+    # and update the gradient accordingly
+    f = f - np.dot(w,nu);
+    g = m - nu;
+    H = sp.sparse.csr_matrix(h,shape=(N,N))
+    return f,m,g,H;
 
 class Density_2 (ma.Density_2):
     def __init__(self, X, f=None, T=None):
@@ -48,25 +59,32 @@ class Density_2 (ma.Density_2):
         """
 
         # by default, the density is uniform over the convex hull of X
-        if f == None:
+        if f is None:
             f = np.ones(X.shape[0])
-        if T == None:
+        if T is None:
             T = delaunay_2(X)
         ma.Density_2.__init__(self, X,f,T);
 
     @classmethod
     def from_image(cls,im,bbox=None):
-        if bbox==None:
+    	"""
+    	This function constructs a density from an image. 
+    	
+    	Args:
+    		im: source image
+    		bbox: box containing the points
+    	"""
+        if bbox is None:
             bbox = [-1,1,-1,1];
-        w = im.shape[0];
-        h = im.shape[1];
+        h = im.shape[0];
+        w = im.shape[1];
         [x,y] = np.meshgrid(np.linspace(bbox[0],bbox[1],w),
                             np.linspace(bbox[2],bbox[3],h));
         Nx = w*h;
         x = np.reshape(x,(Nx));
         y = np.reshape(y,(Nx));
-        X = np.vstack([x,y]).T;
-        return cls(X,np.reshape(im,(Nx)))
+        z = np.reshape(im,(Nx));
+        return cls(np.vstack([x,y]).T,z)
 
     def kantorovich(self,Y,nu,w):
         N = len(nu);
@@ -79,7 +97,7 @@ class Density_2 (ma.Density_2):
         return f,m,g,H;
 
     def lloyd(self,X,w=None):
-        if w==None:
+        if w is None:
             w = np.zeros(X.shape[0]);
         return ma.lloyd_2(self,X,w);
         
@@ -141,7 +159,7 @@ class Periodic_density_2 (ma.Density_2):
         return f,m,g,H;
 
     def lloyd(self,Y,w=None):
-        if w==None:
+        if w is None:
             w = np.zeros(Y.shape[0]);
         N = Y.shape[0];
         Y0 = self.to_fundamental_domain(Y)
@@ -175,7 +193,6 @@ class Periodic_density_2 (ma.Density_2):
         Y /= np.tile(m,(2,1)).T
         #Y = self.to_fundamental_domain(Y);
         return (Y,m)
-
 
 # The hessian of Kantorovich's functional is not invertible, because
 # its kernel contains constant vectors. Removing the last line and

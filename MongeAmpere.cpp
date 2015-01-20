@@ -131,10 +131,10 @@ public:
 	triangles.push_back(Triangle(it->vertex(0)->point(),
 				     it->vertex(1)->point(),
 				     it->vertex(2)->point()));
-	ta += MA::integrate_centroid(it->vertex(0)->point(),
-				     it->vertex(1)->point(),
-				     it->vertex(2)->point(),
-				     _functions[it]);
+	ta += MA::integrate_centroid<double>(it->vertex(0)->point(),
+					     it->vertex(1)->point(),
+					     it->vertex(2)->point(),
+					     _functions[it]);
 	cumareas.push_back(ta);
       }
   }
@@ -198,10 +198,10 @@ public:
     for (auto f = _t.finite_faces_begin(); 
 	 f != _t.finite_faces_end(); ++f)
       {
-	total += MA::integrate_centroid(f->vertex(0)->point(),
-					f->vertex(1)->point(),
-					f->vertex(2)->point(),
-					_functions[f]);
+	total += MA::integrate_centroid<double>(f->vertex(0)->point(),
+						f->vertex(1)->point(),
+						f->vertex(2)->point(),
+						_functions[f]);
       }
     return total;
   }
@@ -371,30 +371,36 @@ lloyd_2(const Density_2 &pl,
 		      np::dtype::get_builtin<double>());
   auto c = python_to_matrix<double>(pc); 
 
-  MA::lloyd(pl._t, pl._functions, X, w, c, m);
+  MA::lloyd(pl._t, pl._functions, X, w, m, c);
   return p::make_tuple(pc, pm);
 }
 
 p::tuple
-first_moment_2(const Density_2 &pl,
-		 const np::ndarray &pX, 
-		 const np::ndarray &pw)
+moments_2(const Density_2 &pl,
+	  const np::ndarray &pX, 
+	  const np::ndarray &pw)
 {
   auto X = python_to_matrix<double>(pX);
   auto w = python_to_vector<double>(pw);
-  check_points_and_weights(X, w);
 
   size_t N = X.rows();
-  // create some room for return values: centroids and masses
+  assert(X.cols() == 2);
+  assert(w.cols() == 1);
+  assert(w.rows() == N);
+
+  // create some room for return values: masses, centroids and inertia
   auto pm = np::zeros(p::make_tuple(N),
 		      np::dtype::get_builtin<double>());
-  auto m = python_to_vector<double>(pm); 
+  auto m = python_to_vector<double>(pm);
   auto pc = np::zeros(p::make_tuple(N,2),
 		      np::dtype::get_builtin<double>());
-  auto c = python_to_matrix<double>(pc); 
+  auto c = python_to_matrix<double>(pc);
+  auto pI = np::zeros(p::make_tuple(N,3), // inertia matrices wrt origin
+		      np::dtype::get_builtin<double>());
+  auto I = python_to_matrix<double>(pc);
 
-  MA::first_moment(pl._t, pl._functions, X, w, c, m);
-  return p::make_tuple(pc, pm);
+  MA::second_moment(pl._t, pl._functions, X, w, m, c, I);
+  return p::make_tuple(pc, pm, pI);
 }
 
 void python_to_sparse (const p::object &ph,
@@ -461,8 +467,8 @@ BOOST_PYTHON_MODULE(MongeAmperePP)
     .def("mass", &Density_2::mass)
     .def("random_sampling", &Density_2::random_sampling);
   p::def("kantorovich_2", &kantorovich_2);
-  p::def("first_moment_2", &first_moment_2);
   p::def("lloyd_2", &lloyd_2);
+  p::def("moments_2", &moments_2);
   p::def("delaunay_2", &delaunay_2);
   p::def("solve_cholesky", &solve_cholesky);
 }
