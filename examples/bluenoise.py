@@ -36,7 +36,7 @@ mu = sp.misc.imrotate(mu, 180);
 mu = 255-np.asarray(mu, dtype=float);
 dens = ma.Density_2.from_image(mu,[0,1,0,1]);
 
-N = 50000;
+N = 20000;
 Y = dens.random_sampling(N);
 nu = np.ones(N);
 nu = (dens.mass() / np.sum(nu)) * nu;
@@ -44,7 +44,7 @@ nu = (dens.mass() / np.sum(nu)) * nu;
 # smoothen point cloud
 w = np.zeros(N);
 for i in xrange(1,3):
-    [Z,m] = ma.lloyd_2(dens, Y, w);
+    [Z,m] = dens.lloyd(Y, w);
     Y = Z
 
 # Set image to full window
@@ -64,7 +64,7 @@ S = (surf/N)*avg_gray
 
 for i in xrange(1,5):
     w = ma.optimal_transport_2(dens,Y,nu,verbose=True);
-    [Z,m] = ma.lloyd_2(dens, Y, w);
+    [Z,m] = dens.lloyd(Y, w);
     Y = Z
     plt.cla();
     plt.gca().set_aspect('equal')

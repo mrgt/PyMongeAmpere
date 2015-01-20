@@ -31,7 +31,7 @@ Y = np.random.rand(N,2);
 w = np.zeros(N);
 
 for i in xrange(1,50):
-    [Z,m] = ma.lloyd_2(dens, Y, w);
+    [Z,m] = dens.lloyd(Y, w);
     Y=Z;
     plt.cla();
     T = ma.delaunay_2(Y,w);

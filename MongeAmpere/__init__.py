@@ -13,22 +13,21 @@
 
 import sys
 import os
+
+# FIXME: we need to find a nice way to detect the path to MongeAmperePP
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../lib/');
+sys.path.append('../lib/');
 
 import MongeAmperePP as ma
 import numpy as np
 import scipy as sp
 import scipy.optimize as opt
+import matplotlib.pyplot as plt
 
 def delaunay_2(X,w=None):
     if w==None:
         w = np.zeros(X.shape[0]);
     return ma.delaunay_2(X,w);
-
-def lloyd_2(dens,X,w=None):
-    if w==None:
-        w = np.zeros(X.shape[0]);
-    return ma.lloyd_2(dens,X,w);
 
 class Density_2 (ma.Density_2):
     def __init__(self, X, f=None, T=None):
@@ -69,50 +68,113 @@ class Density_2 (ma.Density_2):
         X = np.vstack([x,y]).T;
         return cls(X,np.reshape(im,(Nx)))
 
+    def kantorovich(self,Y,nu,w):
+        N = len(nu);
+        [f,m,h] = ma.kantorovich_2(self, Y, w);
+        # compute the linear part of the optimal transport functional
+        # and update the gradient accordingly
+        f = f - np.dot(w,nu);
+        g = m - nu;
+        H = sp.sparse.csr_matrix(h,shape=(N,N))
+        return f,m,g,H;
+
+    def lloyd(self,X,w=None):
+        if w==None:
+            w = np.zeros(X.shape[0]);
+        return ma.lloyd_2(self,X,w);
         
-    def optimized_sampling(self, N, niter=1,verbose=False):
-        """
-        This functions constructs an optimized sampling of the density,
-        combining semi-discrete optimal transport to determine the size
-        of Voronoi cells with Lloyd's algorithm to relocate the points
-        at the centroids.
+class Periodic_density_2 (ma.Density_2):
+    def __init__(self, bbox):
+        self.x0 = np.array([bbox[0],bbox[1]]);
+        self.x1 = np.array([bbox[2],bbox[3]]);
+        self.u = self.x1 - self.x0;
+        X = np.array([[bbox[0],bbox[1]],
+                      [bbox[0],bbox[3]],
+                      [bbox[2],bbox[1]],
+                      [bbox[2],bbox[3]]])
+        f = np.ones(X.shape[0])
+        T = delaunay_2(X)
+        ma.Density_2.__init__(self, X,f,T)
 
-        See: Blue Noise through Optimal Transport
-             de Goes, Breeden, Ostromoukhov, Desbrun
-             ACM Transactions on Graphics 31(6)
+    def to_fundamental_domain(self,Y):
+        N = Y.shape[0];
+        Y = (Y - np.tile(self.x0,(N,1))) / np.tile(self.u,(N,1)); 
+        Y = Y - np.floor(Y);
+        Y = np.tile(self.x0,(N,1)) + Y * np.tile(self.u,(N,1));
+        return Y;
 
-        Args:
-            N: number of points in the constructed sample
-            niter: number of iterations of optimal transport (default at 1)
-            verbose: display informations on the iterations
+    # FIXME
+    def kantorovich(self,Y,nu,w):
+        N = len(nu);
 
-        Returns:
-            A numpy array with N rows and 2 columns containing the coordinates of
-            the optimized sample points.
-        """
-        Y = self.random_sampling(N);
-        nu = np.ones(N);
-        nu = (self.mass() / np.sum(nu)) * nu;
-        
-        w = np.zeros(N);
-        for i in xrange(1,5):
-            Y = lloyd_2(self, Y, w)[0];
-        for i in xrange(0,niter):
-            if verbose:
-                print "optimized_sampling, step %d" % (i+1)
-            w = optimal_transport_2(self,Y,nu,verbose=verbose);
-            Y = lloyd_2(self, Y, w)[0];
-        return Y
+        # create copies of the points, so as to cover the neighborhood
+        # of the fundamental domain.
+        Y0 = self.to_fundamental_domain(Y)
+        x = self.u[0]
+        y = self.u[1]
+        v = np.array([[0,0],
+                      [x,0], [-x,0], [0,y], [0,-y],
+                      [x,y], [-x,y], [x,-y], [-x,-y]]);
+        Yf = np.zeros((9*N,2))
+        wf = np.hstack((w,w,w,w,w,w,w,w,w));
+        for i in xrange(0,9):
+            Nb = N*i; Ne = N*(i+1)
+            Yf[Nb:Ne,:] = Y0 + np.tile(v[i,:],(N,1))
 
-def kantorovich_2(dens,Y,nu,w):
-    N = len(nu);
-    [f,m,h] = ma.kantorovich_2(dens, Y, w);
-    # compute the linear part of the optimal transport functional
-    # and update the gradient accordingly
-    f = f - np.dot(w,nu);
-    g = m - nu;
-    H = sp.sparse.csr_matrix(h,shape=(N,N))
-    return f,m,g,H;
+        # sum the masses of each "piece" of the Voronoi cells
+        [f,mf,hf] = ma.kantorovich_2(self, Yf, wf);
+
+        m = np.zeros(N);
+        for i in xrange(0,9):
+            Nb = N*i; Ne = N*(i+1);
+            m += mf[Nb:Ne]
+
+        # adapt the Hessian by correcting indices of points. we use
+        # the property that elements that appear multiple times in a
+        # sparse matrix are summed
+        h = (hf[0], (np.mod(hf[1][0], N), np.mod(hf[1][1], N)))
+
+        # remove the linear part of the function
+        f = f - np.dot(w,nu);
+        g = m - nu;
+        H = sp.sparse.csr_matrix(h,shape=(N,N))
+        return f,m,g,H;
+
+    def lloyd(self,Y,w=None):
+        if w==None:
+            w = np.zeros(Y.shape[0]);
+        N = Y.shape[0];
+        Y0 = self.to_fundamental_domain(Y)
+
+        # create copies of the points, so as to cover the neighborhood
+        # of the fundamental domain.
+        x = self.u[0]
+        y = self.u[1]
+        v = np.array([[0,0],
+                      [x,0], [-x,0], [0,y], [0,-y],
+                      [x,y], [-x,y], [x,-y], [-x,-y]]);
+        Yf = np.zeros((9*N,2))
+        wf = np.hstack((w,w,w,w,w,w,w,w,w));
+        for i in xrange(0,9):
+            Nb = N*i; Ne = N*(i+1)
+            Yf[Nb:Ne,:] = Y0 + np.tile(v[i,:],(N,1))
+
+        # sum the moments and masses of each "piece" of the Voronoi
+        # cells
+        [Yf,mf] = ma.first_moment_2(self, Yf, wf);
+
+        Y = np.zeros((N,2));
+        m = np.zeros(N);
+        for i in xrange(0,9):
+            Nb = N*i; Ne = N*(i+1);
+            m += mf[Nb:Ne]
+            ww = np.tile(mf[Nb:Ne],(2,1)).T
+            Y += Yf[Nb:Ne,:] - ww * np.tile(v[i,:],(N,1))
+
+        # rescale the moments to get centroids
+        Y /= np.tile(m,(2,1)).T
+        #Y = self.to_fundamental_domain(Y);
+        return (Y,m)
 
 
 # The hessian of Kantorovich's functional is not invertible, because
@@ -137,7 +199,7 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
         w = w0;
     else:
         w = np.zeros(N);
-    [f,m,g,H] = kantorovich_2(dens, Y, nu, w);
+    [f,m,g,H] = dens.kantorovich(Y, nu, w);
 
     # we impose a minimum weighted area for Laguerre cells during the
     # execution of the algorithm:
@@ -152,13 +214,14 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
     if eps0 <= 0:
         if min(m) <= 0:
             ii = np.argmin();
-            raise ValueError("optimal_transport_2: minimum cell area is zero; "
-                             "this is because the cell %d corresponding to the "
-                             " point (%g,%g) is empty" %
-                             (ii, Y[ii,0], Y[ii,1]));
+            raise ValueError("optimal_transport_2: minimum cell area is"
+                             "zero; this is because the cell %d "
+                             " corresponding to the point (%g,%g) is "
+                             " empty" % (ii, Y[ii,0], Y[ii,1]));
         else: # in this case min(mu) == 0
             ii = np.argmin();
-            raise ValueError("optimal_transport_2: minimum cell area is zero; "
+            raise ValueError("optimal_transport_2: minimum cell area "
+                             "is zero; "
                              "this is because the target cell masses vanishes, nu[%d] == 0" % ii);
 
     # warn the user if the smallest cell has a mass close to zero, as
@@ -179,7 +242,7 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
 
         while True:
             w = w0 + alpha * d;
-            [f,m,g,H] = kantorovich_2(dens, Y, nu, w);
+            [f,m,g,H] = dens.kantorovich(Y, nu, w);
             if (min(m) >= eps0 and
                 np.linalg.norm(g) <= (1-alpha/2)*n0):
                 break;
@@ -189,3 +252,37 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
                    % (it, f,np.linalg.norm(g),alpha));
         it = it+1;
     return w
+
+def optimized_sampling_2(dens, N, niter=1,verbose=False):
+    """
+    This functions constructs an optimized sampling of the density,
+    combining semi-discrete optimal transport to determine the size
+    of Voronoi cells with Lloyd's algorithm to relocate the points
+    at the centroids.
+
+    See: Blue Noise through Optimal Transport
+         de Goes, Breeden, Ostromoukhov, Desbrun
+         ACM Transactions on Graphics 31(6)
+
+    Args:
+        N: number of points in the constructed sample
+        niter: number of iterations of optimal transport (default: 1)
+        verbose: display informations on the iterations
+    
+    Returns:
+        A numpy array with N rows and 2 columns containing the
+        coordinates of the optimized sample points.
+    """
+    Y = dens.random_sampling(N);
+    nu = np.ones(N);
+    nu = (dens.mass() / np.sum(nu)) * nu;
+        
+    w = np.zeros(N);
+    for i in xrange(1,5):
+        Y = dens.lloyd(Y, w)[0];
+    for i in xrange(0,niter):
+        if verbose:
+            print "optimized_sampling, step %d" % (i+1)
+        w = optimal_transport_2(dens,Y,nu,verbose=verbose);
+        Y = dens.lloyd(Y, w)[0];
+    return Y

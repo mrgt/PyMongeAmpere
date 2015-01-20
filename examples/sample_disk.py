@@ -26,7 +26,7 @@ Nx = 30;
 t = np.linspace(0,2*np.pi,Nx+1);
 t = t[0:Nx]
 disk = np.vstack([np.cos(t),np.sin(t)]).T;
-X = ma.Density_2(disk).optimized_sampling(1000,verbose=True);
+X = ma.optimized_sampling_2(ma.Density_2(disk), 1000, verbose=True);
 sigma = 7;
 mu = np.exp(-sigma*(np.power(X[:,0],2) + np.power(X[:,1],2)));
 dens = ma.Density_2(X,mu);
@@ -38,13 +38,13 @@ nu = (dens.mass() / np.sum(nu)) * nu;
 
 w = np.zeros(N);
 for i in xrange(1,5):
-    [Z,m] = ma.lloyd_2(dens, Y, w);
+    [Z,m] = dens.lloyd(Y, w);
     Y = Z;
 
 plt.figure(figsize=(10,10),facecolor="white")
 for i in xrange(1,10):
     w = ma.optimal_transport_2(dens,Y,nu);
-    [Z,m] = ma.lloyd_2(dens, Y, w);
+    [Z,m] = dens.lloyd(Y, w);
     Y = Z
     plt.cla();
     plt.gca().set_aspect('equal')

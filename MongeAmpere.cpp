@@ -212,7 +212,7 @@ public:
     std::vector<double> cumareas;
     compute_cum_masses(triangles, cumareas);
 
-    auto pX = np::zeros(p::make_tuple(N,3),
+    auto pX = np::zeros(p::make_tuple(N,2),
 		       np::dtype::get_builtin<double>());
     auto X = python_to_matrix<double>(pX);
 
@@ -333,6 +333,25 @@ delaunay_2(const np::ndarray &pX,
   return pt;
 }
 
+template <class Matrix, class Vector>
+void check_points_and_weights(const Matrix &X, 
+			      const Vector &w)
+{
+  if(X.cols() != 2)
+    {
+      PyErr_SetString(PyExc_TypeError,
+		      "Point array dimension should be Nx2");
+      std::cerr << X.rows() << " " <<  X.cols() << "\n";
+      p::throw_error_already_set();
+    }
+  if(w.cols() != 1 || w.rows() != X.rows())
+    {
+      PyErr_SetString(PyExc_TypeError,
+		      "Weight array should be Nx1, where N is "
+		      "the number of points");
+      p::throw_error_already_set();
+    }
+}
 
 p::tuple
 lloyd_2(const Density_2 &pl,
@@ -341,12 +360,9 @@ lloyd_2(const Density_2 &pl,
 {
   auto X = python_to_matrix<double>(pX);
   auto w = python_to_vector<double>(pw);
+  check_points_and_weights(X, w);
 
   size_t N = X.rows();
-  assert(X.cols() == 2);
-  assert(w.cols() == 1);
-  assert(w.rows() == N);
-
   // create some room for return values: centroids and masses
   auto pm = np::zeros(p::make_tuple(N),
 		      np::dtype::get_builtin<double>());
@@ -356,6 +372,28 @@ lloyd_2(const Density_2 &pl,
   auto c = python_to_matrix<double>(pc); 
 
   MA::lloyd(pl._t, pl._functions, X, w, c, m);
+  return p::make_tuple(pc, pm);
+}
+
+p::tuple
+first_moment_2(const Density_2 &pl,
+		 const np::ndarray &pX, 
+		 const np::ndarray &pw)
+{
+  auto X = python_to_matrix<double>(pX);
+  auto w = python_to_vector<double>(pw);
+  check_points_and_weights(X, w);
+
+  size_t N = X.rows();
+  // create some room for return values: centroids and masses
+  auto pm = np::zeros(p::make_tuple(N),
+		      np::dtype::get_builtin<double>());
+  auto m = python_to_vector<double>(pm); 
+  auto pc = np::zeros(p::make_tuple(N,2),
+		      np::dtype::get_builtin<double>());
+  auto c = python_to_matrix<double>(pc); 
+
+  MA::first_moment(pl._t, pl._functions, X, w, c, m);
   return p::make_tuple(pc, pm);
 }
 
@@ -423,6 +461,7 @@ BOOST_PYTHON_MODULE(MongeAmperePP)
     .def("mass", &Density_2::mass)
     .def("random_sampling", &Density_2::random_sampling);
   p::def("kantorovich_2", &kantorovich_2);
+  p::def("first_moment_2", &first_moment_2);
   p::def("lloyd_2", &lloyd_2);
   p::def("delaunay_2", &delaunay_2);
   p::def("solve_cholesky", &solve_cholesky);
