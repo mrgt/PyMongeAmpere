@@ -397,10 +397,10 @@ moments_2(const Density_2 &pl,
   auto c = python_to_matrix<double>(pc);
   auto pI = np::zeros(p::make_tuple(N,3), // inertia matrices wrt origin
 		      np::dtype::get_builtin<double>());
-  auto I = python_to_matrix<double>(pc);
+  auto I = python_to_matrix<double>(pI);
 
   MA::second_moment(pl._t, pl._functions, X, w, m, c, I);
-  return p::make_tuple(pc, pm, pI);
+  return p::make_tuple(pm, pc, pI);
 }
 
 void python_to_sparse (const p::object &ph,

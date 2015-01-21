@@ -29,7 +29,6 @@ def delaunay_2(X,w=None):
         w = np.zeros(X.shape[0]);
     return ma.delaunay_2(X,w);
 
-
 def kantorovich_2(dens,Y,nu,w):
     N = len(nu);
     [f,m,h] = ma.kantorovich_2(dens, Y, w);
@@ -100,6 +99,11 @@ class Density_2 (ma.Density_2):
         if w is None:
             w = np.zeros(X.shape[0]);
         return ma.lloyd_2(self,X,w);
+
+    def moments(self,X,w=None):
+        if w is None:
+            w = np.zeros(X.shape[0]);
+        return ma.moments_2(self,X,w);
         
 class Periodic_density_2 (ma.Density_2):
     def __init__(self, bbox):
