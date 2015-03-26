@@ -25,6 +25,7 @@ typedef Eigen::MatrixXd MatrixXd;
 #include <CGAL/Triangulation_incremental_builder_2.h>
 #include <CGAL/Triangulation_vertex_base_with_info_2.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Random.h>
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 typedef CGAL::Triangulation_vertex_base_with_info_2<size_t, K> Vb;
@@ -92,8 +93,8 @@ python_to_vector(const np::ndarray &array)
      array.shape(0), DynamicStride(0,s0));
 }
 
-inline double rand01()
-{ return rand()/(double(RAND_MAX)+1); }
+inline double rand01(CGAL::Random& g)
+{ return g.uniform_01<float>();}
 
 class Density_2
 {
@@ -101,7 +102,7 @@ public:
   T _t;
   typedef MA::Linear_function<K> Function;
   std::map<T::Face_handle, Function> _functions;
-
+	CGAL::Random gen;
     
   struct Triangle
   {
@@ -109,9 +110,10 @@ public:
     Point a, b, c;
     Triangle (const Point &aa, const Point &bb, const Point &cc) :
       a(aa), b(bb), c(cc) {}
-    Point rand() const
+
+    Point rand(CGAL::Random& g) const
     {
-      double r1 = sqrt(rand01()), r2 = rand01();
+      double r1 = sqrt(rand01(g)), r2 = rand01(g);
       return  CGAL::ORIGIN + ((1 - r1) * (a-CGAL::ORIGIN)  +
 			      (r1 * (1 - r2)) * (b-CGAL::ORIGIN) +
 			      (r1 * r2) * (c-CGAL::ORIGIN));
@@ -143,7 +145,7 @@ public:
 public:
   Density_2(const np::ndarray &npX, 
 	    const np::ndarray &npf,
-	    const np::ndarray &npT)
+	    const np::ndarray &npT) : gen(clock())
   {
     auto X = python_to_matrix<double>(npX);
     auto f = python_to_vector<double>(npf);
@@ -219,11 +221,11 @@ public:
     double ta = cumareas.back();    
     for (size_t i = 0; i < N; ++i)
       {
-	double r = rand01() * ta;
+    double r = rand01(gen) * ta;
 	size_t n = (std::lower_bound(cumareas.begin(),
 				     cumareas.end(), r) -
 		    cumareas.begin());
-	Point p = triangles[n].rand();
+	Point p = triangles[n].rand(gen);
 	X(i,0) = p.x();
 	X(i,1) = p.y();
       }
