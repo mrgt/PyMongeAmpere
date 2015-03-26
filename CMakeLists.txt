@@ -1,17 +1,29 @@
 project(PyMongeAmpere)
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/thirdparty/Boost.NumPy/libs/numpy/cmake ${CMAKE_MODULE_PATH})
+
 
 IF(NOT CMAKE_BUILD_TYPE)
   SET(CMAKE_BUILD_TYPE "RELWITHDEBINFO") # RELEASE
 ENDIF()
 
-# Boost + Boost::Python
-FIND_PACKAGE(Boost 1.54.0 COMPONENTS python REQUIRED)
-SET(Boost_USE_STATIC_LIBS OFF)
-SET(Boost_USE_MULTITHREADED ON)
-SET(Boost_USE_STATIC_RUNTIME OFF)
-link_libraries(${Boost_LIBRARIES})
-INCLUDE_DIRECTORIES("${Boost_INCLUDE_DIRS}")
+# find required python packages
+find_package(PythonInterp REQUIRED)
+find_package(PythonLibsNew REQUIRED)
+find_package(NumPy REQUIRED)
+include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE_DIRS})
+
+# find boost
+# 
+# set(Boost_USE_STATIC_LIBS ON)
+# set(Boost_USE_MULTITHREADED ON) 
+# set(Boost_USE_STATIC_RUNTIME ON)
+FIND_PACKAGE(Boost COMPONENTS python REQUIRED)
+
+message( STATUS "found boost:"
+  "\nINCLUDE: ${Boost_INCLUDE_DIRS}"
+  "\nLIB: ${Boost_LIBRARIES}"
+)
 
 # enable C++11
 ADD_DEFINITIONS(-std=c++11 -pg)
@@ -32,11 +44,6 @@ ENDIF()
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${MONGE_AMPERE_DIR}/cmake)
 INCLUDE_DIRECTORIES(${MONGE_AMPERE_DIR}/include)
 
-# python
-find_package(PythonLibs REQUIRED)
-include_directories(${PYTHON_INCLUDE_DIRS})
-link_libraries(${PYTHON_LIBRARIES})
-
 # Eigen3
 find_package(Eigen3 REQUIRED)
 include_directories(${EIGEN3_INCLUDE_DIR})
@@ -50,6 +57,14 @@ LINK_LIBRARIES(boost_numpy)
 find_package( CGAL QUIET COMPONENTS)
 include( ${CGAL_USE_FILE} )
 LINK_LIBRARIES(${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES} )
+
+if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
+  # Update if necessary
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+endif()
+
+FIND_PACKAGE ( X11 REQUIRED )
+INCLUDE_DIRECTORIES ( ${X11_INCLUDE_DIR} )
 
 # # SuiteSparse (optional)
 # find_package(SuiteSparse)
