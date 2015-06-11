@@ -183,7 +183,7 @@ class Periodic_density_2 (ma.Density_2):
 
         # sum the moments and masses of each "piece" of the Voronoi
         # cells
-        [Yf,mf] = ma.first_moment_2(self, Yf, wf);
+        [mf,Yf,If] = ma.moments_2(self, Yf, wf);
 
         Y = np.zeros((N,2));
         m = np.zeros(N);
