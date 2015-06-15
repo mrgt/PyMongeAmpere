@@ -18,6 +18,7 @@ typedef double FT;
 typedef Eigen::SparseMatrix<FT> SparseMatrix;
 typedef Eigen::SparseVector<FT> SparseVector;
 typedef Eigen::VectorXd VectorXd;
+typedef Eigen::Vector2d Vector2d;
 typedef Eigen::MatrixXd MatrixXd;
 
 
@@ -379,24 +380,35 @@ lloyd_2(const Density_2 &pl,
   return p::make_tuple(pc, pm);
 }
 
-// Lloyd_2 conforming to some boundary
+template <class K>
 bool
-object_contains_point(const CGAL::Object &oi)
+object_contains_point(const CGAL::Object &oi, CGAL::Point_2<K> &intp)
 {
-  return ((CGAL::object_cast<Point>(&oi) != NULL) ||
-	  (CGAL::object_cast<Segment>(&oi) != NULL));
+  if(const CGAL::Point_2<K>* r = CGAL::object_cast< CGAL::Point_2<K> >(&oi))
+    {
+      intp = *r;
+      return true;
+    }
+  else if(const CGAL::Segment_2<K>* s = CGAL::object_cast< CGAL::Segment_2<K> >(&oi))
+    {
+      intp = CGAL::midpoint(s->source(), s->target());
+      return true;
+    }
+  return false;
 }
 
+template <class K>
 bool
 edge_dual_and_segment_isect(const CGAL::Object &o, 
-			    const Segment &s)
+				   const CGAL::Segment_2<K> &s,
+				   CGAL::Point_2<K> &intp)
 {
-  if (auto *os = CGAL::object_cast<Segment>(&o))
-    return object_contains_point(CGAL::intersection(*os, s));
-  if (auto *ol = CGAL::object_cast<Line>(&o))
-    return object_contains_point(CGAL::intersection(*ol, s));
-  if (auto *orr = CGAL::object_cast<Ray>(&o))
-    return object_contains_point(CGAL::intersection(*orr, s));
+  if (const CGAL::Segment_2<K> *os = CGAL::object_cast< CGAL::Segment_2<K> >(&o))
+    return object_contains_point(CGAL::intersection(*os, s), intp);
+  if (const CGAL::Line_2<K> *ol = CGAL::object_cast<CGAL::Line_2<K> >(&o))
+    return object_contains_point(CGAL::intersection(*ol, s), intp);
+  if (const CGAL::Ray_2<K> *orr = CGAL::object_cast< CGAL::Ray_2<K> >(&o))
+    return object_contains_point(CGAL::intersection(*orr, s), intp);
   return false;
 }
 
@@ -406,20 +418,20 @@ compute_adjacencies_with_polygon
     (const Matrix &X,
      const Vector &weights,
      const Matrix &polygon,
-     std::vector<std::vector<size_t>> &adjedges,
+     std::vector<std::vector<Segment>> &adjedges,
      std::vector<std::vector<size_t>> &adjverts)
 {
   auto rt = MA::details::make_regular_triangulation(X,weights);
 
   int Np = polygon.rows();
   int Nv = X.rows();
-  adjedges.assign(Nv, std::vector<size_t>());
+  adjedges.assign(Nv, std::vector<Segment>());
   adjverts.assign(Nv, std::vector<size_t>());
 
   for (int p = 0; p < Np; ++p)
     {
       int pnext = (p + 1) % Np;
-      int pprev = (p + Np - 1) % Np;
+      //int pprev = (p + Np - 1) % Np;
       Point source(polygon(p,0), polygon(p,1));
       Point target(polygon(pnext,0), polygon(pnext,1));
 
@@ -427,7 +439,7 @@ compute_adjacencies_with_polygon
       auto v = rt.nearest_power_vertex(target);
 
       adjverts[u->info()].push_back(p);
-      adjverts[v->info()].push_back(pnext);
+      Point pointprev = source;
 
       auto  uprev = u;
       while (u != v)
@@ -446,12 +458,14 @@ compute_adjacencies_with_polygon
 
 	      // check whether dual edge (which can be a ray, a line
 	      // or a segment) intersects with the constraint
+	      Point point;
 	      if (!edge_dual_and_segment_isect(rt.dual(c),
-					       Segment(source,target)))
+					       Segment(source,target),
+					       point))
 		continue;
 
-	      adjedges[u->info()].push_back(p);
-	      adjedges[unext->info()].push_back(p);
+	      adjedges[u->info()].push_back(Segment(pointprev,point));
+	      pointprev = point;
 	      uprev = u;
 	      u = unext;
 
@@ -459,6 +473,9 @@ compute_adjacencies_with_polygon
 	    }
 	  while(++c != done);
 	}
+
+      adjverts[v->info()].push_back(pnext);
+      adjedges[v->info()].push_back(Segment(pointprev, target));
     }
 }
 
@@ -500,10 +517,11 @@ conforming_lloyd_2(const Density_2 &pl,
 
   MA::lloyd(pl._t, pl._functions, X, w, m, c);
 
-  std::vector<std::vector<size_t>> adjedges;
+  std::vector<std::vector<Segment>> adjedges;
   std::vector<std::vector<size_t>> adjverts;
   compute_adjacencies_with_polygon(X, w, poly, adjedges, adjverts);
 
+  //double lengthbd = 0;
   for (size_t i = 0; i < N; ++i)
     {
       if (adjverts[i].size() != 0)
@@ -514,10 +532,12 @@ conforming_lloyd_2(const Density_2 &pl,
 	  VectorXd proj;
 	  for (size_t j = 0; j < adjedges[i].size(); ++j)
 	    {
-	      size_t source = adjedges[i][j];
-	      size_t dest = (adjedges[i][j]+1) % poly.rows();
-	      auto p = projection_on_segment(poly.row(source),
-					     poly.row(dest),
+	      Vector2d source (adjedges[i][j].source().x(),
+			       adjedges[i][j].source().y());
+	      Vector2d dest (adjedges[i][j].target().x(),
+			     adjedges[i][j].target().y());
+	      //lengthbd += (source-dest).norm();
+	      auto p = projection_on_segment(source, dest,
 					     c.row(i));
 	      double dp = (p - c.row(i)).squaredNorm();
 	      if (mindist > dp)
@@ -529,6 +549,7 @@ conforming_lloyd_2(const Density_2 &pl,
 	  c.row(i) = proj;
 	}
     }
+  //std::cerr << "length = " << lengthbd << "\n";
 
   return p::make_tuple(pc, pm);
 }
