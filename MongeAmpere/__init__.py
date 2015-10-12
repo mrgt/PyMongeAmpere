@@ -63,6 +63,10 @@ class Density_2 (ma.Density_2):
         if T is None:
             T = delaunay_2(X)
         ma.Density_2.__init__(self, X,f,T);
+        self.vertices = X.copy()
+        self.triangles = T.copy()
+        self.values = f.copy()
+        #self.boundary = self.compute_boundary()
 
     @classmethod
     def from_image(cls,im,bbox=None):
@@ -225,7 +229,7 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
     # we impose a minimum weighted area for Laguerre cells during the
     # execution of the algorithm:
     # eps0 = min(minimum of cells areas at beginning,
-    #           minimum of target areas).
+    #            minimum of target areas).
     eps0 = min(min(m),min(nu))/2;
     it = 0;
 

@@ -27,18 +27,33 @@ typedef Eigen::MatrixXd MatrixXd;
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Random.h>
 
+#include <MA/functions.hpp>
+#include <MA/kantorovich.hpp>
+#include <MA/lloyd.hpp>
+
+// Triangulation
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+typedef K::FT FT;
 typedef CGAL::Triangulation_vertex_base_with_info_2<size_t, K> Vb;
 typedef CGAL::Triangulation_data_structure_2<Vb> Tds;
 typedef CGAL::Triangulation_2<K,Tds> T;
 
+// Regular triangulation
+typedef CGAL::Regular_triangulation_filtered_traits_2<K> RT_Traits;
+typedef CGAL::Regular_triangulation_vertex_base_2<RT_Traits> RTVbase;
+typedef CGAL::Triangulation_vertex_base_with_info_2
+<size_t, RT_Traits, RTVbase> RTVb;
+typedef CGAL::Regular_triangulation_face_base_2<RT_Traits> RTCb;
+typedef CGAL::Triangulation_data_structure_2<RTVb,RTCb> RTTds;
+typedef CGAL::Regular_triangulation_2<RT_Traits, RTTds> RT;
+
+
+typedef RT::Weighted_point Weighted_point;
+typedef typename CGAL::Segment_2<K> Segment;
 typedef CGAL::Point_2<K> Point;
 typedef CGAL::Vector_2<K> Vector;
 typedef CGAL::Line_2<K> Line;
 
-#include <MA/functions.hpp>
-#include <MA/kantorovich.hpp>
-#include <MA/lloyd.hpp>
   
 #include <boost/python.hpp>
 #include <boost/numpy.hpp>
@@ -93,6 +108,92 @@ python_to_vector(const np::ndarray &array)
      array.shape(0), DynamicStride(0,s0));
 }
 
+void python_to_sparse (const p::object &ph,
+		       SparseMatrix &h)
+{
+  np::ndarray pS = p::extract<np::ndarray>(ph.attr("data"));
+  np::ndarray pI = p::extract<np::ndarray>(ph.attr("row"));
+  np::ndarray pJ = p::extract<np::ndarray>(ph.attr("col"));
+  p::tuple pshape = p::extract<p::tuple>(ph.attr("shape"));
+  auto S = python_to_vector<double>(pS);
+  auto I = python_to_vector<int>(pI);
+  auto J = python_to_vector<int>(pJ);
+  size_t nnz = S.rows();
+  assert(I.rows() == nnz);
+  assert(J.rows() == nnz);
+
+  size_t M = p::extract<size_t>(pshape[0]);
+  size_t N = p::extract<size_t>(pshape[1]);
+
+  // build matrix
+  typedef Eigen::Triplet<FT> Triplet;
+  std::vector<Triplet> triplets(nnz);  
+  for (size_t i = 0; i < nnz; ++i)
+    {
+      // std::cerr << "(i,j,s) = ("
+      // 		<< I(i) << ", " << J(i) << ", " << S(i) << ")\n";
+      triplets[i] = Triplet(I(i), J(i), S(i));
+    }
+  h = SparseMatrix(M,N);
+  h.setFromTriplets(triplets.begin(), triplets.end());
+  h.makeCompressed();
+}
+
+void
+python_to_delaunay_2(const np::ndarray &pX, 
+		     const np::ndarray &pw, 
+		     RT &dt)
+{
+  auto X = python_to_matrix<double>(pX);
+  auto w = python_to_vector<double>(pw);
+
+  size_t N = X.rows();
+  assert(X.cols() == 2);
+  assert(w.cols() == 1);
+  assert(w.rows() == N);
+
+  
+  // insert points with indices in the regular triangulation
+  std::vector<std::pair<Weighted_point,size_t> > Xw(N);
+  for (size_t i = 0; i < N; ++i)
+    {
+      Xw[i] = std::make_pair(Weighted_point(Point(X(i,0), X(i,1)),
+					    w(i)), i);
+    }
+  dt.clear();
+  dt.insert(Xw.begin(), Xw.end());
+  dt.infinite_vertex()->info() = -1;
+}
+
+void restricted_voronoi_edges (const T &t,
+			       const RT &rt,
+			       std::vector<Segment> &edges)
+{
+  typedef CGAL::Polygon_2<K> Polygon;
+  typedef RT::Vertex_handle Vertex_handle_RT;
+  
+  
+  typedef MA::Voronoi_intersection_traits<K> Traits;
+  typedef typename MA::Tri_intersector<T,RT,Traits> Tri_isector;  
+  typedef typename Tri_isector::Pgon Pgon;
+  Tri_isector isector;
+  
+  MA::voronoi_triangulation_intersection_raw
+    (t,rt, [&] (const Pgon &pgon, typename T::Face_handle f, Vertex_handle_RT v)
+     {
+       for (size_t i = 0; i < pgon.size(); ++i)
+	 {
+	   size_t iprev = (i+pgon.size()-1)%pgon.size();
+	   size_t inext = (i+1)%pgon.size();
+	   Point p = isector.vertex_to_point(pgon[i], pgon[iprev]);
+	   Point q = isector.vertex_to_point(pgon[i], pgon[inext]);
+	   if (pgon[i].type != Tri_isector::EDGE_DT)
+	     continue;
+	   edges.push_back(Segment(p,q)); 
+	 }
+       });
+  }
+
 inline double rand01(CGAL::Random& g)
 { return g.uniform_01<float>();}
 
@@ -102,7 +203,7 @@ public:
   T _t;
   typedef MA::Linear_function<K> Function;
   std::map<T::Face_handle, Function> _functions;
-	CGAL::Random gen;
+  CGAL::Random gen;
     
   struct Triangle
   {
@@ -140,7 +241,6 @@ public:
 	cumareas.push_back(ta);
       }
   }
-
   
 public:
   Density_2(const np::ndarray &npX, 
@@ -194,6 +294,60 @@ public:
       }
   }
 
+  np::ndarray compute_boundary()
+  {
+    std::vector<std::pair<size_t, size_t> > bd;
+    // for (T::All_edges_iterator it = _t.all_edges_begin(); 
+    // 	 it != _t.all_edges_end(); ++it)
+    for (T::Finite_edges_iterator it = _t.finite_edges_begin(); 
+	 it != _t.finite_edges_end(); ++it)
+      {
+	T::Edge e = *it;
+	// std::cerr << e.first->vertex(e.second)->info()
+	// 	  << " -> [" 
+	// 	  << e.first->vertex((e.second+1)%3)->info() << ", "
+	// 	  << e.first->vertex((e.second+2)%3)->info() << "]\n";
+	if (_t.is_infinite(e.first->vertex(e.second)))
+	  {
+	    int i1= e.first->vertex((e.second+1)%3)->info();
+	    int i2= e.first->vertex((e.second+2)%3)->info();
+	    bd.push_back(std::make_pair(i1,i2));
+	  }
+      }
+    size_t N = bd.size();
+    auto pX = np::zeros(p::make_tuple(N,2),
+		       np::dtype::get_builtin<int>());
+    auto X = python_to_matrix<int>(pX);    
+    for (size_t i = 0; i < N; ++i)
+      {
+	X(i,0) = bd[i].first;
+	X(i,1) = bd[i].second;
+      }
+    return pX;
+  }
+
+  np::ndarray restricted_voronoi_edges(const np::ndarray &pX, 
+				       const np::ndarray &pw)
+  {
+    RT dt;
+    python_to_delaunay_2(pX, pw, dt);
+    std::vector<Segment> edges;
+    ::restricted_voronoi_edges(_t,dt,edges);
+
+    size_t N = edges.size();
+    auto pEdges = np::zeros(p::make_tuple(N,4),
+			    np::dtype::get_builtin<double>());
+    auto Edges = python_to_matrix<double>(pEdges);    
+    for (size_t i = 0; i < N; ++i)
+      {
+	Edges(i,0) = edges[i].source().x();
+	Edges(i,1) = edges[i].source().y();
+	Edges(i,2) = edges[i].target().x();
+	Edges(i,3) = edges[i].target().y();
+      }
+    return pEdges;
+  }
+
   double mass()
   {
     double total(0);
@@ -208,7 +362,7 @@ public:
     return total;
   }
 
-  np::ndarray random_sampling (int N)
+  np::ndarray random_sampling (size_t N)
   {
     std::vector<Triangle> triangles;
     std::vector<double> cumareas;
@@ -221,7 +375,7 @@ public:
     double ta = cumareas.back();    
     for (size_t i = 0; i < N; ++i)
       {
-    double r = rand01(gen) * ta;
+	double r = rand01(gen) * ta;
 	size_t n = (std::lower_bound(cumareas.begin(),
 				     cumareas.end(), r) -
 		    cumareas.begin());
@@ -278,42 +432,13 @@ kantorovich_2(const Density_2 &pl,
 		       sparse_to_python(h));
 }
 
+
 np::ndarray
 delaunay_2(const np::ndarray &pX, 
 	   const np::ndarray &pw)
 {
-  auto X = python_to_matrix<double>(pX);
-  auto w = python_to_vector<double>(pw);
-
-  size_t N = X.rows();
-  assert(X.cols() == 2);
-  assert(w.cols() == 1);
-  assert(w.rows() == N);
-
-  typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
-  typedef CGAL::Polygon_2<K> Polygon;
-  typedef K::FT FT;
-  typedef CGAL::Regular_triangulation_filtered_traits_2<K> RT_Traits;
-  typedef CGAL::Regular_triangulation_vertex_base_2<RT_Traits> Vbase;
-  typedef CGAL::Triangulation_vertex_base_with_info_2
-      <size_t, RT_Traits, Vbase> Vb;
-  typedef CGAL::Regular_triangulation_face_base_2<RT_Traits> Cb;
-  typedef CGAL::Triangulation_data_structure_2<Vb,Cb> Tds;
-  typedef CGAL::Regular_triangulation_2<RT_Traits, Tds> RT;
-  
-  typedef RT::Vertex_handle Vertex_handle_RT;
-  typedef RT::Weighted_point Weighted_point;
-  typedef typename CGAL::Point_2<K> Point;
-  
-  // insert points with indices in the regular triangulation
-  std::vector<std::pair<Weighted_point,size_t> > Xw(N);
-  for (size_t i = 0; i < N; ++i)
-    {
-      Xw[i] = std::make_pair(Weighted_point(Point(X(i,0), X(i,1)),
-					    w(i)), i);
-    }
-  RT dt (Xw.begin(), Xw.end());
-  dt.infinite_vertex()->info() = -1;
+  RT dt;
+  python_to_delaunay_2(pX, pw, dt);
   
   size_t Nt = dt.number_of_faces();
 
@@ -405,36 +530,6 @@ moments_2(const Density_2 &pl,
   return p::make_tuple(pm, pc, pI);
 }
 
-void python_to_sparse (const p::object &ph,
-		       SparseMatrix &h)
-{
-  np::ndarray pS = p::extract<np::ndarray>(ph.attr("data"));
-  np::ndarray pI = p::extract<np::ndarray>(ph.attr("row"));
-  np::ndarray pJ = p::extract<np::ndarray>(ph.attr("col"));
-  p::tuple pshape = p::extract<p::tuple>(ph.attr("shape"));
-  auto S = python_to_vector<double>(pS);
-  auto I = python_to_vector<int>(pI);
-  auto J = python_to_vector<int>(pJ);
-  size_t nnz = S.rows();
-  assert(I.rows() == nnz);
-  assert(J.rows() == nnz);
-
-  size_t M = p::extract<size_t>(pshape[0]);
-  size_t N = p::extract<size_t>(pshape[1]);
-
-  // build matrix
-  typedef Eigen::Triplet<FT> Triplet;
-  std::vector<Triplet> triplets(nnz);  
-  for (size_t i = 0; i < nnz; ++i)
-    {
-      // std::cerr << "(i,j,s) = ("
-      // 		<< I(i) << ", " << J(i) << ", " << S(i) << ")\n";
-      triplets[i] = Triplet(I(i), J(i), S(i));
-    }
-  h = SparseMatrix(M,N);
-  h.setFromTriplets(triplets.begin(), triplets.end());
-  h.makeCompressed();
-}
 
 // This function solves a linear system using a Cholesky
 // decomposition. This implementation seems faster and more robust
@@ -466,6 +561,9 @@ BOOST_PYTHON_MODULE(MongeAmperePP)
     ("Density_2",
        p::init<const np::ndarray &,const np::ndarray&,
 	       const np::ndarray&>())
+    //.def_readonly("boundary", &Density_2::boundary)
+    //.def("compute_boundary", &Density_2::compute_boundary)
+    .def("restricted_voronoi_edges", &Density_2::restricted_voronoi_edges)
     .def("mass", &Density_2::mass)
     .def("random_sampling", &Density_2::random_sampling);
   p::def("kantorovich_2", &kantorovich_2);
