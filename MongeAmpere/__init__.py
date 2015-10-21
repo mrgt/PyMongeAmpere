@@ -22,6 +22,7 @@ import MongeAmperePP as ma
 import numpy as np
 import scipy as sp
 import scipy.optimize as opt
+from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
 
 def delaunay_2(X,w=None):
@@ -62,11 +63,10 @@ class Density_2 (ma.Density_2):
             f = np.ones(X.shape[0])
         if T is None:
             T = delaunay_2(X)
-        ma.Density_2.__init__(self, X,f,T);
         self.vertices = X.copy()
         self.triangles = T.copy()
-        self.values = f.copy()
-        #self.boundary = self.compute_boundary()
+        self.values = f.copy()            
+        ma.Density_2.__init__(self, X,f,T);
 
     @classmethod
     def from_image(cls,im,bbox=None):
@@ -187,7 +187,7 @@ class Periodic_density_2 (ma.Density_2):
 
         # sum the moments and masses of each "piece" of the Voronoi
         # cells
-        [Yf,mf] = ma.first_moment_2(self, Yf, wf);
+        [mf,Yf,If] = ma.moments_2(self, Yf, wf);
 
         Y = np.zeros((N,2));
         m = np.zeros(N);
@@ -217,19 +217,21 @@ def solve_graph_laplacian(H,g):
 
 def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
                         maxit=100, verbose=False):
-    # if no initial guess is provided, start with zero, and compute
-    # function value, gradient and hessian
+	# if no initial guess is provided, start with a pre-estimated solution.
+	# Then compute function value, gradient and hessian
     N = Y.shape[0];
     if len(w0) == N:
         w = w0;
     else:
-        w = np.zeros(N);
+        #w = np.zeros(N);
+		w = presolution(Y, dens.vertices, nu)
+    
     [f,m,g,H] = dens.kantorovich(Y, nu, w);
 
     # we impose a minimum weighted area for Laguerre cells during the
     # execution of the algorithm:
     # eps0 = min(minimum of cells areas at beginning,
-    #            minimum of target areas).
+    #           minimum of target areas).
     eps0 = min(min(m),min(nu))/2;
     it = 0;
 
