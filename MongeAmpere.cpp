@@ -165,9 +165,9 @@ python_to_delaunay_2(const np::ndarray &pX,
   dt.infinite_vertex()->info() = -1;
 }
 
-void restricted_voronoi_edges (const T &t,
-			       const RT &rt,
-			       std::vector<Segment> &edges)
+void restricted_laguerre_edges (const T &t,
+				const RT &rt,
+				std::vector<Segment> &edges)
 {
   typedef CGAL::Polygon_2<K> Polygon;
   typedef RT::Vertex_handle Vertex_handle_RT;
@@ -326,13 +326,13 @@ public:
     return pX;
   }
 
-  np::ndarray restricted_voronoi_edges(const np::ndarray &pX, 
-				       const np::ndarray &pw)
+  np::ndarray restricted_laguerre_edges(const np::ndarray &pX, 
+					const np::ndarray &pw)
   {
     RT dt;
     python_to_delaunay_2(pX, pw, dt);
     std::vector<Segment> edges;
-    ::restricted_voronoi_edges(_t,dt,edges);
+    ::restricted_laguerre_edges(_t,dt,edges);
 
     size_t N = edges.size();
     auto pEdges = np::zeros(p::make_tuple(N,4),
@@ -563,7 +563,7 @@ BOOST_PYTHON_MODULE(MongeAmperePP)
 	       const np::ndarray&>())
     //.def_readonly("boundary", &Density_2::boundary)
     //.def("compute_boundary", &Density_2::compute_boundary)
-    .def("restricted_voronoi_edges", &Density_2::restricted_voronoi_edges)
+    .def("restricted_laguerre_edges", &Density_2::restricted_laguerre_edges)
     .def("mass", &Density_2::mass)
     .def("random_sampling", &Density_2::random_sampling);
   p::def("kantorovich_2", &kantorovich_2);
