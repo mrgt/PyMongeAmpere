@@ -20,6 +20,7 @@ sys.path.append('../lib/');
 
 import MongeAmperePP as ma
 import numpy as np
+import numpy.matlib
 import scipy as sp
 import scipy.optimize as opt
 from scipy.spatial import ConvexHull
@@ -224,12 +225,8 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
         w = w0;
     else:
         w = np.zeros(N);
-	#	w = presolution(Y, dens.vertices, nu)
     
     [f,m,g,H] = dens.kantorovich(Y, nu, w);
-    if min(m) <= 0:
-	w = presolution(Y, dens.vertices, nu)
-        [f,m,g,H] = dens.kantorovich(Y, nu, w)
 
     # we impose a minimum weighted area for Laguerre cells during the
     # execution of the algorithm:
@@ -317,7 +314,7 @@ def optimized_sampling_2(dens, N, niter=1,verbose=False):
         Y = dens.lloyd(Y, w)[0];
     return Y
     
-def presolution(Y, X, Y_w=None, X_w=None):
+def optimal_transport_presolve_2(Y, X, Y_w=None, X_w=None):
 	"""
 	This function calculates first estimation of the potential.
 	
@@ -344,8 +341,8 @@ def presolution(Y, X, Y_w=None, X_w=None):
 	if Y_w is None:
 		Y_w = np.ones(Y.shape[0])
 	
-	bary_X = barycentre(X, X_w)
-	bary_Y = barycentre(Y, Y_w)
+	bary_X = np.average(X,axis=0,weights=X_w)
+	bary_Y = np.average(Y,axis=0,weights=Y_w)
 	
 	# Y circum circle radius centered on bary_Y
 	r_Y = furthest_point(Y, bary_Y)
@@ -371,33 +368,7 @@ def presolution(Y, X, Y_w=None, X_w=None):
 	psi0 = np.power(Y[:,0],2) + np.power(Y[:,1],2) - 2*psi_tilde0
 	
 	return psi0
-	
-def barycentre(pts, w):
-	"""
-	Computes the barycentre of the points cloud pts
-	affected with w weights, in a space of arbitrary
-	dimension dim.
-	
-	Parameters
-	----------
-	pts : array (N,dim)
-		Cloud of points
-	w : 1D array (N,)
-		Weights associated to pts
-		
-	Returns
-	-------
-	bary : array (dim,)
-		Coordinates of barycentre
-	"""
-	assert(pts.shape[0] == w.shape[0])
-	
-	dim = pts.shape[1]
-	bary = np.zeros(dim)
-	for i in range(dim):
-		bary[i] = np.sum(w * pts[:,i])
-	bary = bary / np.sum(w)
-	return bary
+
 	
 def distance_point_line(m, n, pt):
 	"""
@@ -447,8 +418,6 @@ def furthest_point(cloud, a):
 	assert(a.shape[0] == cloud.shape[1])
 	N = np.shape(cloud)[0]
 	dim = np.shape(cloud)[1]
-	tmp = np.ones((N, dim))	# Avoids the use of a for loop over nbPts
-	for i in range(dim):
-		tmp[:,i] = tmp[:,i]*a[i]
+	tmp = np.matlib.repmat(a,N,1)
 	dist = np.linalg.norm(tmp-cloud, axis=1)
 	return np.max(dist)
