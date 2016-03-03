@@ -31,6 +31,7 @@ typedef Eigen::MatrixXd MatrixXd;
 #include <MA/functions.hpp>
 #include <MA/kantorovich.hpp>
 #include <MA/lloyd.hpp>
+#include <MA/rasterization.hpp>
 
 // Triangulation
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
@@ -172,10 +173,7 @@ void restricted_laguerre_edges (const T &t,
 				const RT &rt,
 				std::vector<Segment> &edges)
 {
-  typedef CGAL::Polygon_2<K> Polygon;
-  typedef RT::Vertex_handle Vertex_handle_RT;
-  
-  
+  typedef RT::Vertex_handle Vertex_handle_RT; 
   typedef MA::Voronoi_intersection_traits<K> Traits;
   typedef typename MA::Tri_intersector<T,RT,Traits> Tri_isector;  
   typedef typename Tri_isector::Pgon Pgon;
@@ -505,6 +503,52 @@ lloyd_2(const Density_2 &pl,
   return p::make_tuple(pc, pm);
 }
 
+p::list
+rasterize_2(const Density_2 &pl,
+	    const np::ndarray &pX, 
+	    const np::ndarray &pw,
+	    const np::ndarray &pcolors,
+	    double x0, double y0, double x1, double y1, // bounding box
+	    int ww, int hh)
+{
+  auto X = python_to_matrix<double>(pX);
+  auto w = python_to_vector<double>(pw);
+  auto colors = python_to_matrix<double>(pcolors);
+  check_points_and_weights(X, w);
+  if (colors.rows() != X.rows())
+    {
+      PyErr_SetString(PyExc_TypeError,
+		      "Color array should be Nxk, where N is "
+		      "the number of points and k arbitrary");
+      p::throw_error_already_set();
+    }
+  typedef VectorXd Color;
+  std::vector<Color> colorv (colors.rows());
+  for (int i = 0; i < colors.rows(); ++i)
+    colorv[i] = colors.row(i);
+
+  // FIXME: avoid matrix copies
+  int nchannels = colors.cols();
+  std::vector<MatrixXd> channels(nchannels, MatrixXd::Zero(ww,hh));
+  MA::draw_laguerre_diagram(pl._t, pl._functions, X, w, colorv,
+			    x0, y0, x1, y1, ww, hh,
+			    [&](int i, int j, const Color &col)
+			    {
+			      for (int k = 0; k < nchannels; ++k)
+				channels[k](i,j) += col[k];
+			    });
+
+  auto pr = p::list();
+  for (int k = 0; k < nchannels; ++k)
+    {
+      auto pc = np::zeros(p::make_tuple(ww,hh),
+			  np::dtype::get_builtin<double>());
+      python_to_matrix<double>(pc) = channels[k];
+      pr.append(pc);
+    }
+  return pr;
+}
+
 template <class K>
 bool
 object_contains_point(const CGAL::Object &oi, CGAL::Point_2<K> &intp)
@@ -726,7 +770,7 @@ solve_cholesky(const p::object &ph,
   
   auto pr = np::zeros(p::make_tuple(r.rows()),
 		      np::dtype::get_builtin<double>());
-  for (size_t i = 0; i < r.rows(); ++i)
+  for (int i = 0; i < r.rows(); ++i)
     pr[i] = r[i];
   return pr;
 }
@@ -749,5 +793,6 @@ BOOST_PYTHON_MODULE(MongeAmperePP)
   p::def("conforming_lloyd_2", &conforming_lloyd_2);
   p::def("moments_2", &moments_2);
   p::def("delaunay_2", &delaunay_2);
+  p::def("rasterize_2", &rasterize_2);
   p::def("solve_cholesky", &solve_cholesky);
 }
