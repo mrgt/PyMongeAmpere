@@ -295,10 +295,10 @@ def laguerre_diagram_to_image(dens, Y, w, colors, bbox, ww, hh):
     A = ma.rasterize_2(dens, Y, w, colors, bbox[0], bbox[1], bbox[2], bbox[3], ww, hh);
 
     if (nc == 1):
-        img = to_grayscale(A[0])
+        img = to_grayscale(A[0].T)
         return img
     elif (nc == 3):
-        img = to_rgb(A[0],A[1],A[2])
+        img = to_rgb(A[0].T,A[1].T,A[2].T)
     else:
         raise ValueError("laguerre_diagram_to_image: number of color channels should be 1 or 3")
     return img
