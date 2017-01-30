@@ -27,8 +27,8 @@ if len(sys.argv) > 1:
     cloudname = os.path.splitext(name)[0] + '.cloud';
     img = sp.misc.imread(name, flatten=True);
 else:
-    cloudname = "lena.cloud";
-    img = sp.misc.lena();
+    cloudname = "face.cloud";
+    img = sp.misc.face();
 
 n = 256;
 mu = sp.misc.imresize(img, (n,n));

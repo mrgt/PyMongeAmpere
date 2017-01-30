@@ -280,7 +280,7 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
         it = it+1;
     return w
 
-import Image
+from PIL import Image
 def to_grayscale(I):
     I8 = np.minimum(255.0*I, 255).astype(np.uint8)
     return Image.fromarray(I8)
