@@ -15,8 +15,9 @@ import sys
 import os
 
 # FIXME: we need to find a nice way to detect the path to MongeAmperePP
-sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../lib/');
-sys.path.append('../lib/');
+sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../rel/');
+# sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../lib/');
+# sys.path.append('../lib/');
 
 import MongeAmperePP as ma
 import numpy as np
@@ -159,7 +160,8 @@ class Periodic_density_2 (ma.Density_2):
         # adapt the Hessian by correcting indices of points. we use
         # the property that elements that appear multiple times in a
         # sparse matrix are summed
-        h = (hf[0], (np.mod(hf[1][0], N), np.mod(hf[1][1], N)))
+        row, col = hf.nonzero()
+        h = (hf.data, (np.mod(row, N), np.mod(col, N)))
 
         # remove the linear part of the function
         f = f - np.dot(w,nu);
