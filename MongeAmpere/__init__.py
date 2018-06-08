@@ -71,12 +71,12 @@ class Density_2 (ma.Density_2):
 
     @classmethod
     def from_image(cls,im,bbox=None):
-    """
-    This function constructs a density from an image.
+        """
+        This function constructs a density from an image.
  
-    Args:
-        im: source image
-        bbox: box containing the points
+        Args:
+            im: source image
+            bbox: box containing the points
     """
         if bbox is None:
             bbox = [-1,1,-1,1];
@@ -342,7 +342,7 @@ def optimized_sampling_2(dens, N, niter=1,verbose=False):
         Y = dens.lloyd(Y, w)[0];
     for i in xrange(0,niter):
         if verbose:
-            print "optimized_sampling, step %d" % (i+1)
+            print("optimized_sampling, step %d" % (i+1))
         w = optimal_transport_2(dens,Y,nu,verbose=verbose);
         Y = dens.lloyd(Y, w)[0];
     return Y
