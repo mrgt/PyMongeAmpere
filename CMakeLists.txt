@@ -30,8 +30,9 @@ ADD_DEFINITIONS(-std=c++11 -pg)
 
 # monge-ampere
 LIST(APPEND MONGE_AMPERE_CHECK_INCLUDE_DIRS
+  $ENV{MA_DIR}
   ${PyMongeAmpere_SOURCE_DIR}/../MongeAmpere
-  ${MA_DIR})
+  )
 
 find_path(MONGE_AMPERE_DIR NAMES include/MA/quadrature.hpp
   PATHS ${MONGE_AMPERE_CHECK_INCLUDE_DIRS})

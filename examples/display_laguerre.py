@@ -13,7 +13,7 @@ def draw_laguerre_cells(dens,Y,w):
     N = E.shape[0]
     x = np.zeros(3*N)
     y = np.zeros(3*N)
-    a = np.array(range(0,N-1))
+    a = np.array(range(0,N))
     x[3*a] = E[:,0]
     x[3*a+1] = E[:,2]
     x[3*a+2] = nan
