@@ -54,7 +54,7 @@ INCLUDE_DIRECTORIES(${PyMongeAmpere_SOURCE_DIR}/thirdparty/Boost.NumPy)
 LINK_LIBRARIES(boost_numpy)
 
 # CGAL and its components
-find_package( CGAL QUIET COMPONENTS)
+find_package( CGAL REQUIRED)
 include( ${CGAL_USE_FILE} )
 LINK_LIBRARIES(${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES} )
 
