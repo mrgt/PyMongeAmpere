@@ -42,13 +42,12 @@ typedef CGAL::Triangulation_data_structure_2<Vb> Tds;
 typedef CGAL::Triangulation_2<K,Tds> T;
 
 // Regular triangulation
-typedef CGAL::Regular_triangulation_filtered_traits_2<K> RT_Traits;
-typedef CGAL::Regular_triangulation_vertex_base_2<RT_Traits> RTVbase;
+typedef CGAL::Regular_triangulation_vertex_base_2<K> RTVbase;
 typedef CGAL::Triangulation_vertex_base_with_info_2
-<size_t, RT_Traits, RTVbase> RTVb;
-typedef CGAL::Regular_triangulation_face_base_2<RT_Traits> RTCb;
+<size_t, K, RTVbase> RTVb;
+typedef CGAL::Regular_triangulation_face_base_2<K> RTCb;
 typedef CGAL::Triangulation_data_structure_2<RTVb,RTCb> RTTds;
-typedef CGAL::Regular_triangulation_2<RT_Traits, RTTds> RT;
+typedef CGAL::Regular_triangulation_2<K, RTTds> RT;
 
 
 typedef RT::Weighted_point Weighted_point;

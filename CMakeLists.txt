@@ -28,8 +28,9 @@ ADD_DEFINITIONS(-std=c++11 -pg)
 # monge-ampere
 # TODO: better way of detecting MongeAmpere
 LIST(APPEND MONGE_AMPERE_CHECK_INCLUDE_DIRS
+  $ENV{MA_DIR}
   ${PyMongeAmpere_SOURCE_DIR}/../MongeAmpere
-  ${MA_DIR})
+  )
 
 find_path(MONGE_AMPERE_DIR NAMES include/MA/quadrature.hpp
   PATHS ${MONGE_AMPERE_CHECK_INCLUDE_DIRS})
@@ -47,7 +48,7 @@ find_package(Eigen3 REQUIRED)
 include_directories(${EIGEN3_INCLUDE_DIR})
 
 # CGAL and its components
-find_package( CGAL QUIET COMPONENTS)
+find_package( CGAL REQUIRED)
 include( ${CGAL_USE_FILE} )
 LINK_LIBRARIES(${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES} )
 
