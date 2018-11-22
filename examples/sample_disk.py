@@ -11,6 +11,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+from builtins import range
+
 import sys
 sys.path.append('..');
 import os
@@ -37,12 +39,12 @@ nu = np.ones(N);
 nu = (dens.mass() / np.sum(nu)) * nu;
 
 w = np.zeros(N);
-for i in xrange(1,5):
+for i in range(1,5):
     [Z,m] = dens.lloyd(Y, w);
     Y = Z;
 
 plt.figure(figsize=(10,10),facecolor="white")
-for i in xrange(1,10):
+for i in range(1,10):
     w = ma.optimal_transport_2(dens,Y,nu);
     [Z,m] = dens.lloyd(Y, w);
     Y = Z

@@ -192,9 +192,10 @@ public:
     for (size_t i = 0; i < Nt; ++i)
       {
 	int a = tri(i,0), b = tri(i,1), c = tri(i,2);
-	T::Face_handle fh = builder.add_face(vertices[a],
-					     vertices[b],
-					     vertices[c]);
+	/* T::Face_handle fh = builder.add_face(vertices[a], */
+	/* 				     vertices[b], */
+	/* 				     vertices[c]); */
+	builder.add_face(vertices[a], vertices[b], vertices[c]);
       }
     builder.end_triangulation();
 

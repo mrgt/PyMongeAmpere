@@ -7,6 +7,7 @@ ENDIF()
 
 # find required python packages
 set (PYBIND11_PYTHON_VERSION 2.7)
+# set (PYBIND11_PYTHON_VERSION 3.7)
 set(PYBIND11_CPP_STANDARD -std=c++11)
 add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/pybind11")
 
@@ -15,12 +16,12 @@ add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/pybind11")
 # set(Boost_USE_STATIC_LIBS ON)
 # set(Boost_USE_MULTITHREADED ON) 
 # set(Boost_USE_STATIC_RUNTIME ON)
-FIND_PACKAGE(Boost COMPONENTS python REQUIRED)
+# FIND_PACKAGE(Boost COMPONENTS python REQUIRED)
 
-message( STATUS "found boost:"
-  "\nINCLUDE: ${Boost_INCLUDE_DIRS}"
-  "\nLIB: ${Boost_LIBRARIES}"
-)
+# message( STATUS "found boost:"
+#   "\nINCLUDE: ${Boost_INCLUDE_DIRS}"
+#   "\nLIB: ${Boost_LIBRARIES}"
+# )
 
 # enable C++11
 ADD_DEFINITIONS(-std=c++11 -pg)

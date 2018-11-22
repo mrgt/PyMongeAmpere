@@ -11,6 +11,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+from builtins import range
+
 import sys
 sys.path.append('..');
 import os
@@ -44,7 +46,7 @@ nu = (dens.mass() / np.sum(nu)) * nu;
 
 # smoothen point cloud
 w = np.zeros(N);
-for i in xrange(1,3):
+for i in range(1,3):
     [Z,m] = dens.lloyd(Y, w);
     Y = Z
 
@@ -63,7 +65,7 @@ surf=(ww*72)*(ww*72); # 72 points per inch
 avg_gray = dens.mass()/255;
 S = (surf/N)*avg_gray
 
-for i in xrange(1,5):
+for i in range(1,5):
     w = ma.optimal_transport_2(dens,Y,nu,verbose=True);
     [Z,m] = dens.lloyd(Y, w);
     Y = Z
