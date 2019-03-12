@@ -6,8 +6,12 @@ IF(NOT CMAKE_BUILD_TYPE)
 ENDIF()
 
 # find required python packages
-set (PYBIND11_PYTHON_VERSION 2.7)
-# set (PYBIND11_PYTHON_VERSION 3.7)
+## Python 2
+# set (PYBIND11_PYTHON_VERSION 2.7)
+## Python 3
+set(PYTHON_EXECUTABLE "python3")
+set(PYBIND11_PYTHON_VERSION 3.6)
+
 set(PYBIND11_CPP_STANDARD -std=c++11)
 add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/pybind11")
 

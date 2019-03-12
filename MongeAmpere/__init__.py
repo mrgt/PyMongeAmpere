@@ -18,10 +18,7 @@ import sys
 import os
 
 # FIXME: we need to find a nice way to detect the path to MongeAmperePP
-# sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../rel/');
-sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../rel-py3/');
-# sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../lib/');
-# sys.path.append('../lib/');
+sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../lib/');
 
 import MongeAmperePP as ma
 import numpy as np

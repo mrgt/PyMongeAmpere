@@ -76,7 +76,6 @@ python_to_delaunay_2(const MatrixXd& X,
   assert(w.cols() == 1);
   assert(w.rows() == N);
 
-
   // insert points with indices in the regular triangulation
   std::vector<std::pair<Weighted_point,size_t> > Xw(N);
   for (size_t i = 0; i < N; ++i)
@@ -192,9 +191,6 @@ public:
     for (size_t i = 0; i < Nt; ++i)
       {
 	int a = tri(i,0), b = tri(i,1), c = tri(i,2);
-	/* T::Face_handle fh = builder.add_face(vertices[a], */
-	/* 				     vertices[b], */
-	/* 				     vertices[c]); */
 	builder.add_face(vertices[a], vertices[b], vertices[c]);
       }
     builder.end_triangulation();
