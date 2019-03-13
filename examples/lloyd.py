@@ -11,6 +11,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+from builtins import range
+
 import sys
 sys.path.append('..');
 
@@ -30,7 +32,7 @@ N = 100;
 Y = np.random.rand(N,2);
 w = np.zeros(N);
 
-for i in xrange(1,50):
+for i in range(1,50):
     [Z,m] = dens.lloyd(Y, w);
     Y=Z;
     plt.cla();

@@ -11,12 +11,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+from builtins import range
+
 import sys
 import os
 
 # FIXME: we need to find a nice way to detect the path to MongeAmperePP
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../lib/');
-sys.path.append('../lib/');
 
 import MongeAmperePP as ma
 import numpy as np
@@ -52,7 +54,7 @@ class Density_2 (ma.Density_2):
         is provided, the density is uniform on the convex hull of X
         (and vanishes outside this convex hull).
 
-        Args: 
+        Args:
             X(array): input points, described by a Nx2 array
             f(array): values of the density at X, described by a Nx1 array (optional)
             T(array): triangulation of X, described by a Nx3 array of integers,
@@ -66,7 +68,7 @@ class Density_2 (ma.Density_2):
             T = delaunay_2(X)
         self.vertices = X.copy()
         self.triangles = T.copy()
-        self.values = f.copy()            
+        self.values = f.copy()
         ma.Density_2.__init__(self, X,f,T);
 
     @classmethod
@@ -109,7 +111,7 @@ class Density_2 (ma.Density_2):
         if w is None:
             w = np.zeros(X.shape[0]);
         return ma.moments_2(self,X,w);
-        
+
 class Periodic_density_2 (ma.Density_2):
     def __init__(self, bbox):
         self.x0 = np.array([bbox[0],bbox[1]]);
@@ -125,7 +127,7 @@ class Periodic_density_2 (ma.Density_2):
 
     def to_fundamental_domain(self,Y):
         N = Y.shape[0];
-        Y = (Y - np.tile(self.x0,(N,1))) / np.tile(self.u,(N,1)); 
+        Y = (Y - np.tile(self.x0,(N,1))) / np.tile(self.u,(N,1));
         Y = Y - np.floor(Y);
         Y = np.tile(self.x0,(N,1)) + Y * np.tile(self.u,(N,1));
         return Y;
@@ -144,7 +146,7 @@ class Periodic_density_2 (ma.Density_2):
                       [x,y], [-x,y], [x,-y], [-x,-y]]);
         Yf = np.zeros((9*N,2))
         wf = np.hstack((w,w,w,w,w,w,w,w,w));
-        for i in xrange(0,9):
+        for i in range(0,9):
             Nb = N*i; Ne = N*(i+1)
             Yf[Nb:Ne,:] = Y0 + np.tile(v[i,:],(N,1))
 
@@ -152,14 +154,15 @@ class Periodic_density_2 (ma.Density_2):
         [f,mf,hf] = ma.kantorovich_2(self, Yf, wf);
 
         m = np.zeros(N);
-        for i in xrange(0,9):
+        for i in range(0,9):
             Nb = N*i; Ne = N*(i+1);
             m += mf[Nb:Ne]
 
         # adapt the Hessian by correcting indices of points. we use
         # the property that elements that appear multiple times in a
         # sparse matrix are summed
-        h = (hf[0], (np.mod(hf[1][0], N), np.mod(hf[1][1], N)))
+        row, col = hf.nonzero()
+        h = (hf.data, (np.mod(row, N), np.mod(col, N)))
 
         # remove the linear part of the function
         f = f - np.dot(w,nu);
@@ -182,7 +185,7 @@ class Periodic_density_2 (ma.Density_2):
                       [x,y], [-x,y], [x,-y], [-x,-y]]);
         Yf = np.zeros((9*N,2))
         wf = np.hstack((w,w,w,w,w,w,w,w,w));
-        for i in xrange(0,9):
+        for i in range(0,9):
             Nb = N*i; Ne = N*(i+1)
             Yf[Nb:Ne,:] = Y0 + np.tile(v[i,:],(N,1))
 
@@ -192,7 +195,7 @@ class Periodic_density_2 (ma.Density_2):
 
         Y = np.zeros((N,2));
         m = np.zeros(N);
-        for i in xrange(0,9):
+        for i in range(0,9):
             Nb = N*i; Ne = N*(i+1);
             m += mf[Nb:Ne]
             ww = np.tile(mf[Nb:Ne],(2,1)).T
@@ -225,7 +228,7 @@ def optimal_transport_2(dens, Y, nu, w0 = [0], eps_g=1e-7,
         w = w0;
     else:
         w = np.zeros(N);
-    
+
     [f,m,g,H] = dens.kantorovich(Y, nu, w);
 
     # we impose a minimum weighted area for Laguerre cells during the
@@ -303,7 +306,7 @@ def laguerre_diagram_to_image(dens, Y, w, colors, bbox, ww, hh):
         raise ValueError("laguerre_diagram_to_image: number of color channels should be 1 or 3")
     return img
 
-        
+
 def to_grayscale(I):
     I8 = np.minimum(255.0*I, 255).astype(np.uint8)
     return Image.fromarray(I8)
@@ -328,7 +331,7 @@ def optimized_sampling_2(dens, N, niter=1,verbose=False):
         N: number of points in the constructed sample
         niter: number of iterations of optimal transport (default: 1)
         verbose: display informations on the iterations
-    
+
     Returns:
         A numpy array with N rows and 2 columns containing the
         coordinates of the optimized sample points.
@@ -336,17 +339,17 @@ def optimized_sampling_2(dens, N, niter=1,verbose=False):
     Y = dens.random_sampling(N);
     nu = np.ones(N);
     nu = (dens.mass() / np.sum(nu)) * nu;
-        
+
     w = np.zeros(N);
-    for i in xrange(1,5):
+    for i in range(1,5):
         Y = dens.lloyd(Y, w)[0];
-    for i in xrange(0,niter):
+    for i in range(0,niter):
         if verbose:
             print("optimized_sampling, step %d" % (i+1))
         w = optimal_transport_2(dens,Y,nu,verbose=verbose);
         Y = dens.lloyd(Y, w)[0];
     return Y
-    
+
 def optimal_transport_presolve_2(Y, X, Y_w=None, X_w=None):
     """
     This function calculates first estimation of the potential.
@@ -429,7 +432,7 @@ def distance_point_line(m, n, pt):
     norm_u = np.linalg.norm(u)
     dist = np.linalg.norm(Mpt - (np.inner(Mpt,u)/(norm_u*norm_u))*u)
     return dist
-        
+
 
 def furthest_point(cloud, a):
     """

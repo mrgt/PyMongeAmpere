@@ -20,6 +20,7 @@ typedef Eigen::SparseVector<FT> SparseVector;
 typedef Eigen::VectorXd VectorXd;
 typedef Eigen::Vector2d Vector2d;
 typedef Eigen::MatrixXd MatrixXd;
+typedef Eigen::MatrixXi MatrixXi;
 
 
 #include <CGAL/Triangulation_2.h>
@@ -57,105 +58,24 @@ typedef CGAL::Line_2<K> Line;
 typedef CGAL::Ray_2<K> Ray;
 typedef CGAL::Segment_2<K> Segment;
 
-  
-#include <boost/python.hpp>
-#include <boost/numpy.hpp>
-#include <boost/scoped_array.hpp>
-#include <iostream>
-namespace p = boost::python;
-namespace np = boost::numpy;
 
-typedef Eigen::Stride<Eigen::Dynamic,Eigen::Dynamic> DynamicStride;
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
+#include <pybind11/eigen.h>
+#include <pybind11/stl.h>
 
-template<class FT>
-Eigen::Map<Eigen::Matrix<FT,-1,-1>, Eigen::Unaligned,  DynamicStride>
-python_to_matrix(const np::ndarray &array)
-{
-  if (array.get_dtype() != np::dtype::get_builtin<FT>())
-    {
-      PyErr_SetString(PyExc_TypeError, "Incorrect array data type");
-      p::throw_error_already_set();
-    }
-  if (array.get_nd() != 2)
-    {
-      PyErr_SetString(PyExc_TypeError, "Incorrect number of dimensions");
-      p::throw_error_already_set();
-    }
-  auto s0 = array.strides(0) / sizeof(FT);
-  auto s1 = array.strides(1) / sizeof(FT);
-  return Eigen::Map<Eigen::Matrix<FT,-1,-1>,
-		    Eigen::Unaligned,  DynamicStride>
-    (reinterpret_cast<FT*>(array.get_data()),
-     array.shape(0), array.shape(1),
-     DynamicStride(s1,s0));
-}
-
-template<class FT>
-Eigen::Map<Eigen::Matrix<FT,-1,1>, Eigen::Unaligned,  DynamicStride>
-python_to_vector(const np::ndarray &array)
-{
-  if (array.get_dtype() != np::dtype::get_builtin<FT>())
-    {
-      PyErr_SetString(PyExc_TypeError, "Incorrect array data type");
-      p::throw_error_already_set();
-    }
-  if (array.get_nd() != 1)
-    {
-      PyErr_SetString(PyExc_TypeError, "Incorrect number of dimensions");
-      p::throw_error_already_set();
-    }
-  auto s0 = array.strides(0) / sizeof(FT);
-  return Eigen::Map<Eigen::Matrix<FT,-1,1>,
-		    Eigen::Unaligned,  DynamicStride>
-    (reinterpret_cast<FT*>(array.get_data()),
-     array.shape(0), DynamicStride(0,s0));
-}
-
-void python_to_sparse (const p::object &ph,
-		       SparseMatrix &h)
-{
-  np::ndarray pS = p::extract<np::ndarray>(ph.attr("data"));
-  np::ndarray pI = p::extract<np::ndarray>(ph.attr("row"));
-  np::ndarray pJ = p::extract<np::ndarray>(ph.attr("col"));
-  p::tuple pshape = p::extract<p::tuple>(ph.attr("shape"));
-  auto S = python_to_vector<double>(pS);
-  auto I = python_to_vector<int>(pI);
-  auto J = python_to_vector<int>(pJ);
-  size_t nnz = S.rows();
-  assert(I.rows() == nnz);
-  assert(J.rows() == nnz);
-
-  size_t M = p::extract<size_t>(pshape[0]);
-  size_t N = p::extract<size_t>(pshape[1]);
-
-  // build matrix
-  typedef Eigen::Triplet<FT> Triplet;
-  std::vector<Triplet> triplets(nnz);  
-  for (size_t i = 0; i < nnz; ++i)
-    {
-      // std::cerr << "(i,j,s) = ("
-      // 		<< I(i) << ", " << J(i) << ", " << S(i) << ")\n";
-      triplets[i] = Triplet(I(i), J(i), S(i));
-    }
-  h = SparseMatrix(M,N);
-  h.setFromTriplets(triplets.begin(), triplets.end());
-  h.makeCompressed();
-}
+namespace py = pybind11;
 
 void
-python_to_delaunay_2(const np::ndarray &pX, 
-		     const np::ndarray &pw, 
+python_to_delaunay_2(const MatrixXd& X,
+                     const VectorXd& w,
 		     RT &dt)
 {
-  auto X = python_to_matrix<double>(pX);
-  auto w = python_to_vector<double>(pw);
-
   size_t N = X.rows();
   assert(X.cols() == 2);
   assert(w.cols() == 1);
   assert(w.rows() == N);
 
-  
   // insert points with indices in the regular triangulation
   std::vector<std::pair<Weighted_point,size_t> > Xw(N);
   for (size_t i = 0; i < N; ++i)
@@ -172,12 +92,12 @@ void restricted_laguerre_edges (const T &t,
 				const RT &rt,
 				std::vector<Segment> &edges)
 {
-  typedef RT::Vertex_handle Vertex_handle_RT; 
+  typedef RT::Vertex_handle Vertex_handle_RT;
   typedef MA::Voronoi_intersection_traits<K> Traits;
-  typedef typename MA::Tri_intersector<T,RT,Traits> Tri_isector;  
+  typedef typename MA::Tri_intersector<T,RT,Traits> Tri_isector;
   typedef typename Tri_isector::Pgon Pgon;
   Tri_isector isector;
-  
+
   MA::voronoi_triangulation_intersection_raw
     (t,rt, [&] (const Pgon &pgon, typename T::Face_handle f, Vertex_handle_RT v)
      {
@@ -189,7 +109,7 @@ void restricted_laguerre_edges (const T &t,
 	   Point q = isector.vertex_to_point(pgon[i], pgon[inext]);
 	   if (pgon[i].type != Tri_isector::EDGE_DT)
 	     continue;
-	   edges.push_back(Segment(p,q)); 
+	   edges.push_back(Segment(p,q));
 	 }
        });
   }
@@ -204,7 +124,7 @@ public:
   typedef MA::Linear_function<K> Function;
   std::map<T::Face_handle, Function> _functions;
   CGAL::Random gen;
-    
+
   struct Triangle
   {
   public:
@@ -221,7 +141,7 @@ public:
     }
   };
 
-  void 
+  void
   compute_cum_masses(std::vector<Triangle> &triangles,
 		     std::vector<double> &cumareas)
   {
@@ -241,16 +161,12 @@ public:
 	cumareas.push_back(ta);
       }
   }
-  
-public:
-  Density_2(const np::ndarray &npX, 
-	    const np::ndarray &npf,
-	    const np::ndarray &npT) : gen(clock())
-  {
-    auto X = python_to_matrix<double>(npX);
-    auto f = python_to_vector<double>(npf);
-    auto tri = python_to_matrix<int>(npT);
 
+public:
+  Density_2(const MatrixXd& X,
+            const VectorXd& f,
+            const MatrixXi& tri) : gen(clock())
+  {
     size_t N = X.rows();
     assert(X.cols() == 2);
     assert(f.cols() == 1);
@@ -260,7 +176,7 @@ public:
 
     CGAL::Triangulation_incremental_builder_2<T> builder(_t);
     builder.begin_triangulation();
-    
+
     // add vertices
     std::vector<T::Vertex_handle> vertices(N);
     for (size_t i = 0; i < N; ++i)
@@ -275,12 +191,10 @@ public:
     for (size_t i = 0; i < Nt; ++i)
       {
 	int a = tri(i,0), b = tri(i,1), c = tri(i,2);
-	T::Face_handle fh = builder.add_face(vertices[a],
-					     vertices[b],
-					     vertices[c]);
+	builder.add_face(vertices[a], vertices[b], vertices[c]);
       }
     builder.end_triangulation();
-    
+
     // compute functions
     for (T::Finite_faces_iterator it = _t.finite_faces_begin ();
 	 it != _t.finite_faces_end(); ++it)
@@ -288,23 +202,23 @@ public:
 	size_t a = it->vertex(0)->info();
 	size_t b = it->vertex(1)->info();
 	size_t c = it->vertex(2)->info();
-	_functions[it] = Function(vertices[a]->point(), f[a], 
-				  vertices[b]->point(), f[b], 
+	_functions[it] = Function(vertices[a]->point(), f[a],
+				  vertices[b]->point(), f[b],
 				  vertices[c]->point(), f[c]);
       }
   }
 
-  np::ndarray compute_boundary()
+  MatrixXi compute_boundary()
   {
     std::vector<std::pair<size_t, size_t> > bd;
-    // for (T::All_edges_iterator it = _t.all_edges_begin(); 
+    // for (T::All_edges_iterator it = _t.all_edges_begin();
     // 	 it != _t.all_edges_end(); ++it)
-    for (T::Finite_edges_iterator it = _t.finite_edges_begin(); 
+    for (T::Finite_edges_iterator it = _t.finite_edges_begin();
 	 it != _t.finite_edges_end(); ++it)
       {
 	T::Edge e = *it;
 	// std::cerr << e.first->vertex(e.second)->info()
-	// 	  << " -> [" 
+	// 	  << " -> ["
 	// 	  << e.first->vertex((e.second+1)%3)->info() << ", "
 	// 	  << e.first->vertex((e.second+2)%3)->info() << "]\n";
 	if (_t.is_infinite(e.first->vertex(e.second)))
@@ -315,29 +229,25 @@ public:
 	  }
       }
     size_t N = bd.size();
-    auto pX = np::zeros(p::make_tuple(N,2),
-		       np::dtype::get_builtin<int>());
-    auto X = python_to_matrix<int>(pX);    
+    MatrixXi X(N, 2);
     for (size_t i = 0; i < N; ++i)
       {
 	X(i,0) = bd[i].first;
 	X(i,1) = bd[i].second;
       }
-    return pX;
+    return X;
   }
 
-  np::ndarray restricted_laguerre_edges(const np::ndarray &pX, 
-					const np::ndarray &pw)
+    MatrixXd restricted_laguerre_edges(const MatrixXd& X,
+                                       const VectorXd& w)
   {
     RT dt;
-    python_to_delaunay_2(pX, pw, dt);
+    python_to_delaunay_2(X, w, dt);
     std::vector<Segment> edges;
     ::restricted_laguerre_edges(_t,dt,edges);
 
     size_t N = edges.size();
-    auto pEdges = np::zeros(p::make_tuple(N,4),
-			    np::dtype::get_builtin<double>());
-    auto Edges = python_to_matrix<double>(pEdges);    
+    MatrixXd Edges(N, 4);
     for (size_t i = 0; i < N; ++i)
       {
 	Edges(i,0) = edges[i].source().x();
@@ -345,13 +255,13 @@ public:
 	Edges(i,2) = edges[i].target().x();
 	Edges(i,3) = edges[i].target().y();
       }
-    return pEdges;
+    return Edges;
   }
 
   double mass()
   {
     double total(0);
-    for (auto f = _t.finite_faces_begin(); 
+    for (auto f = _t.finite_faces_begin();
 	 f != _t.finite_faces_end(); ++f)
       {
 	total += MA::integrate_centroid<double>(f->vertex(0)->point(),
@@ -362,17 +272,15 @@ public:
     return total;
   }
 
-  np::ndarray random_sampling (size_t N)
+  MatrixXd random_sampling (size_t N)
   {
     std::vector<Triangle> triangles;
     std::vector<double> cumareas;
     compute_cum_masses(triangles, cumareas);
 
-    auto pX = np::zeros(p::make_tuple(N,2),
-		       np::dtype::get_builtin<double>());
-    auto X = python_to_matrix<double>(pX);
+    MatrixXd X(N, 2);
 
-    double ta = cumareas.back();    
+    double ta = cumareas.back();
     for (size_t i = 0; i < N; ++i)
       {
 	double r = rand01(gen) * ta;
@@ -383,69 +291,39 @@ public:
 	X(i,0) = p.x();
 	X(i,1) = p.y();
       }
-    return pX;
-  }    
+    return X;
+  }
 };
 
-p::tuple
-sparse_to_python(const SparseMatrix &h)
-{
-  size_t nnz = h.nonZeros();
-  auto gI = np::zeros(p::make_tuple(nnz),
-		      np::dtype::get_builtin<int>());
-  auto gJ = np::zeros(p::make_tuple(nnz),
-		      np::dtype::get_builtin<int>());
-  auto gS = np::zeros(p::make_tuple(nnz),
-		      np::dtype::get_builtin<double>());
-  int i = 0;
-  for (int k = 0; k < h.outerSize(); ++k)
-    {
-      for (SparseMatrix::InnerIterator it(h, k); it; ++it, ++i)
-	{
-	  gI[i] = it.row();
-	  gJ[i] = it.col();
-	  gS[i] = it.value();
-	}
-    }
-  return p::make_tuple(gS,p::make_tuple(gI,gJ));
-}
-
-p::tuple
+std::tuple<double, VectorXd, SparseMatrix>
 kantorovich_2(const Density_2 &pl,
-	      const np::ndarray &pX, 
-	      const np::ndarray &pw)
+	      const MatrixXd &X,
+	      const VectorXd &w)
 {
-  auto X = python_to_matrix<double>(pX);
-  auto w = python_to_vector<double>(pw);
-
   size_t N = X.rows();
   assert(X.cols() == 2);
   assert(w.cols() == 1);
   assert(w.rows() == N);
-  auto pg = np::zeros(p::make_tuple(N),
-		      np::dtype::get_builtin<double>());
-  auto g = python_to_vector<double>(pg);//gradient
+
+  VectorXd g(N);
 
   SparseMatrix h;
   double res = MA::kantorovich(pl._t, pl._functions, X, w, g, h);
-  return p::make_tuple(res, pg, 
-		       sparse_to_python(h));
+  return std::make_tuple(res, g, h);
 }
 
 
-np::ndarray
-delaunay_2(const np::ndarray &pX, 
-	   const np::ndarray &pw)
+MatrixXi
+delaunay_2(const MatrixXd &X,
+           const VectorXd& w)
 {
   RT dt;
-  python_to_delaunay_2(pX, pw, dt);
-  
+  python_to_delaunay_2(X, w, dt);
+
   size_t Nt = dt.number_of_faces();
 
   // convert triangulation to python
-  auto pt = np::zeros(p::make_tuple(Nt,3),
-		      np::dtype::get_builtin<int>());
-  auto t = python_to_matrix<int>(pt);
+  MatrixXi t(Nt, 3);
 
   size_t f = 0;
   for (RT::Finite_faces_iterator it = dt.finite_faces_begin ();
@@ -457,11 +335,11 @@ delaunay_2(const np::ndarray &pX,
       ++f;
     }
   assert(f == Nt);
-  return pt;
+  return t;
 }
 
 template <class Matrix, class Vector>
-void check_points_and_weights(const Matrix &X, 
+void check_points_and_weights(const Matrix &X,
 			      const Vector &w)
 {
   if(X.cols() != 2)
@@ -469,57 +347,48 @@ void check_points_and_weights(const Matrix &X,
       PyErr_SetString(PyExc_TypeError,
 		      "Point array dimension should be Nx2");
       std::cerr << X.rows() << " " <<  X.cols() << "\n";
-      p::throw_error_already_set();
+      throw py::error_already_set();
     }
   if(w.cols() != 1 || w.rows() != X.rows())
     {
       PyErr_SetString(PyExc_TypeError,
 		      "Weight array should be Nx1, where N is "
 		      "the number of points");
-      p::throw_error_already_set();
+      throw py::error_already_set();
     }
 }
 
-p::tuple
+std::tuple<MatrixXd, VectorXd>
 lloyd_2(const Density_2 &pl,
-	const np::ndarray &pX, 
-	const np::ndarray &pw)
+	const MatrixXd &X,
+	const VectorXd &w)
 {
-  auto X = python_to_matrix<double>(pX);
-  auto w = python_to_vector<double>(pw);
   check_points_and_weights(X, w);
 
   size_t N = X.rows();
   // create some room for return values: centroids and masses
-  auto pm = np::zeros(p::make_tuple(N),
-		      np::dtype::get_builtin<double>());
-  auto m = python_to_vector<double>(pm); 
-  auto pc = np::zeros(p::make_tuple(N,2),
-		      np::dtype::get_builtin<double>());
-  auto c = python_to_matrix<double>(pc); 
+  MatrixXd c(N, 2);
+  VectorXd m(N);
 
   MA::lloyd(pl._t, pl._functions, X, w, m, c);
-  return p::make_tuple(pc, pm);
+  return std::make_tuple(c, m);
 }
 
-p::list
+std::vector<MatrixXd>
 rasterize_2(const Density_2 &pl,
-	    const np::ndarray &pX, 
-	    const np::ndarray &pw,
-	    const np::ndarray &pcolors,
+	    const MatrixXd &X,
+	    const VectorXd &w,
+	    const MatrixXd &colors,
 	    double x0, double y0, double x1, double y1, // bounding box
 	    int ww, int hh)
 {
-  auto X = python_to_matrix<double>(pX);
-  auto w = python_to_vector<double>(pw);
-  auto colors = python_to_matrix<double>(pcolors);
   check_points_and_weights(X, w);
   if (colors.rows() != X.rows())
     {
       PyErr_SetString(PyExc_TypeError,
 		      "Color array should be Nxk, where N is "
 		      "the number of points and k arbitrary");
-      p::throw_error_already_set();
+      throw py::error_already_set();
     }
   typedef VectorXd Color;
   std::vector<Color> colorv (colors.rows());
@@ -537,15 +406,7 @@ rasterize_2(const Density_2 &pl,
 				channels[k](i,j) += col[k];
 			    });
 
-  auto pr = p::list();
-  for (int k = 0; k < nchannels; ++k)
-    {
-      auto pc = np::zeros(p::make_tuple(ww,hh),
-			  np::dtype::get_builtin<double>());
-      python_to_matrix<double>(pc) = channels[k];
-      pr.append(pc);
-    }
-  return pr;
+  return channels;
 }
 
 template <class K>
@@ -567,7 +428,7 @@ object_contains_point(const CGAL::Object &oi, CGAL::Point_2<K> &intp)
 
 template <class K>
 bool
-edge_dual_and_segment_isect(const CGAL::Object &o, 
+edge_dual_and_segment_isect(const CGAL::Object &o,
 				   const CGAL::Segment_2<K> &s,
 				   CGAL::Point_2<K> &intp)
 {
@@ -618,7 +479,7 @@ compute_adjacencies_with_polygon
 	    {
 	      if (rt.is_infinite(c))
 		continue;
-	      
+
 	      // we do not want to go back to the previous vertex!
 	      auto unext = (c->first)->vertex(rt.ccw(c->second));
 	      if (unext == uprev)
@@ -660,28 +521,21 @@ VectorXd projection_on_segment(VectorXd v, VectorXd w, VectorXd p)
   double t = (p - v).dot(w - v) / l2;
   t = std::min(std::max(t,0.0), 1.0);
 
-  return v + t * (w - v);  
+  return v + t * (w - v);
 }
 
-p::tuple
+std::tuple<MatrixXd, VectorXd>
 conforming_lloyd_2(const Density_2 &pl,
-		   const np::ndarray &pX, 
-		   const np::ndarray &pw,
-		   const np::ndarray &ppoly)
+		   const MatrixXd &X,
+		   const VectorXd &w,
+		   const MatrixXd &poly)
 {
-  auto X = python_to_matrix<double>(pX);
-  auto w = python_to_vector<double>(pw);
   check_points_and_weights(X, w);
-  auto poly = python_to_matrix<double>(ppoly);
 
   size_t N = X.rows();
   // create some room for return values: centroids and masses
-  auto pm = np::zeros(p::make_tuple(N),
-		      np::dtype::get_builtin<double>());
-  auto m = python_to_vector<double>(pm); 
-  auto pc = np::zeros(p::make_tuple(N,2),
-		      np::dtype::get_builtin<double>());
-  auto c = python_to_matrix<double>(pc); 
+  VectorXd m(N);
+  MatrixXd c(N, 2);
 
   MA::lloyd(pl._t, pl._functions, X, w, m, c);
 
@@ -719,79 +573,63 @@ conforming_lloyd_2(const Density_2 &pl,
     }
   //std::cerr << "length = " << lengthbd << "\n";
 
-  return p::make_tuple(pc, pm);
+  return std::make_tuple(c, m);
 }
 
-
-p::tuple
+std::tuple<VectorXd, MatrixXd, MatrixXd>
 moments_2(const Density_2 &pl,
-	  const np::ndarray &pX, 
-	  const np::ndarray &pw)
+	  const MatrixXd &X,
+	  const VectorXd &w)
 {
-  auto X = python_to_matrix<double>(pX);
-  auto w = python_to_vector<double>(pw);
-
   size_t N = X.rows();
   assert(X.cols() == 2);
   assert(w.cols() == 1);
   assert(w.rows() == N);
 
   // create some room for return values: masses, centroids and inertia
-  auto pm = np::zeros(p::make_tuple(N),
-		      np::dtype::get_builtin<double>());
-  auto m = python_to_vector<double>(pm);
-  auto pc = np::zeros(p::make_tuple(N,2),
-		      np::dtype::get_builtin<double>());
-  auto c = python_to_matrix<double>(pc);
-  auto pI = np::zeros(p::make_tuple(N,3), // inertia matrices wrt origin
-		      np::dtype::get_builtin<double>());
-  auto I = python_to_matrix<double>(pI);
+  VectorXd m(N);
+  MatrixXd c(N, 2);
+  MatrixXd I(N, 3);
 
   MA::second_moment(pl._t, pl._functions, X, w, m, c, I);
-  return p::make_tuple(pm, pc, pI);
+  return std::make_tuple(m, c, I);
 }
 
 
 // This function solves a linear system using a Cholesky
 // decomposition. This implementation seems faster and more robust
 // than scipy's spsolve.
-np::ndarray
-solve_cholesky(const p::object &ph,
-	       np::ndarray &pb)
+VectorXd
+solve_cholesky(const SparseMatrix &h,
+               const VectorXd &b)
 {
-  SparseMatrix h; python_to_sparse(ph,h);
-  VectorXd b = python_to_vector<double>(pb);
   assert(b.rows() == h.rows());
 
   Eigen::SimplicialLLT<SparseMatrix> solver(h);
   VectorXd r = solver.solve(b);
   assert(r.rows() == h.cols());
-  
-  auto pr = np::zeros(p::make_tuple(r.rows()),
-		      np::dtype::get_builtin<double>());
-  for (int i = 0; i < r.rows(); ++i)
-    pr[i] = r[i];
-  return pr;
+
+  return r;
 }
 
+PYBIND11_MODULE(MongeAmperePP, m) {
+    m.doc() = "Monge Ampère solver using Laguerre diagrams";
 
-BOOST_PYTHON_MODULE(MongeAmperePP)
-{
-  np::initialize();
-  p::class_<Density_2>
-    ("Density_2",
-       p::init<const np::ndarray &,const np::ndarray&,
-	       const np::ndarray&>())
+  py::class_<Density_2>
+    (m, "Density_2")
+    .def(py::init<const MatrixXd&,const VectorXd&,
+	       const MatrixXi&>())
     //.def_readonly("boundary", &Density_2::boundary)
     //.def("compute_boundary", &Density_2::compute_boundary)
     .def("restricted_laguerre_edges", &Density_2::restricted_laguerre_edges)
     .def("mass", &Density_2::mass)
     .def("random_sampling", &Density_2::random_sampling);
-  p::def("kantorovich_2", &kantorovich_2);
-  p::def("lloyd_2", &lloyd_2);
-  p::def("conforming_lloyd_2", &conforming_lloyd_2);
-  p::def("moments_2", &moments_2);
-  p::def("delaunay_2", &delaunay_2);
-  p::def("rasterize_2", &rasterize_2);
-  p::def("solve_cholesky", &solve_cholesky);
+
+  m.def("kantorovich_2", &kantorovich_2);
+  m.def("lloyd_2", &lloyd_2);
+  m.def("conforming_lloyd_2", &conforming_lloyd_2);
+  m.def("moments_2", &moments_2);
+  m.def("delaunay_2", &delaunay_2);
+  m.def("rasterize_2", &rasterize_2);
+  m.def("solve_cholesky", &solve_cholesky);
 }

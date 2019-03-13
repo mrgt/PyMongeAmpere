@@ -1,34 +1,37 @@
 project(PyMongeAmpere)
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/thirdparty/Boost.NumPy/libs/numpy/cmake ${CMAKE_MODULE_PATH})
-
 
 IF(NOT CMAKE_BUILD_TYPE)
   SET(CMAKE_BUILD_TYPE "RELWITHDEBINFO") # RELEASE
 ENDIF()
 
 # find required python packages
-find_package(PythonInterp REQUIRED)
-find_package(PythonLibsNew REQUIRED)
-find_package(NumPy REQUIRED)
-include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE_DIRS})
+## Python 2
+# set (PYBIND11_PYTHON_VERSION 2.7)
+## Python 3
+set(PYTHON_EXECUTABLE "python3")
+set(PYBIND11_PYTHON_VERSION 3.6)
+
+set(PYBIND11_CPP_STANDARD -std=c++11)
+add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/pybind11")
 
 # find boost
 # 
 # set(Boost_USE_STATIC_LIBS ON)
 # set(Boost_USE_MULTITHREADED ON) 
 # set(Boost_USE_STATIC_RUNTIME ON)
-FIND_PACKAGE(Boost COMPONENTS python REQUIRED)
+# FIND_PACKAGE(Boost COMPONENTS python REQUIRED)
 
-message( STATUS "found boost:"
-  "\nINCLUDE: ${Boost_INCLUDE_DIRS}"
-  "\nLIB: ${Boost_LIBRARIES}"
-)
+# message( STATUS "found boost:"
+#   "\nINCLUDE: ${Boost_INCLUDE_DIRS}"
+#   "\nLIB: ${Boost_LIBRARIES}"
+# )
 
 # enable C++11
 ADD_DEFINITIONS(-std=c++11 -pg)
 
 # monge-ampere
+# TODO: better way of detecting MongeAmpere
 LIST(APPEND MONGE_AMPERE_CHECK_INCLUDE_DIRS
   $ENV{MA_DIR}
   ${PyMongeAmpere_SOURCE_DIR}/../MongeAmpere
@@ -48,11 +51,6 @@ INCLUDE_DIRECTORIES(${MONGE_AMPERE_DIR}/include)
 # Eigen3
 find_package(Eigen3 REQUIRED)
 include_directories(${EIGEN3_INCLUDE_DIR})
-
-# boost numpy
-ADD_SUBDIRECTORY(thirdparty/Boost.NumPy)
-INCLUDE_DIRECTORIES(${PyMongeAmpere_SOURCE_DIR}/thirdparty/Boost.NumPy)
-LINK_LIBRARIES(boost_numpy)
 
 # CGAL and its components
 find_package( CGAL REQUIRED)
@@ -86,8 +84,7 @@ INCLUDE_DIRECTORIES ( ${X11_INCLUDE_DIR} )
 #   link_libraries(${TBB_LIBRARIES})
 # endif()
 
-ADD_LIBRARY(MongeAmperePP MODULE MongeAmpere.cpp)
-SET_TARGET_PROPERTIES(MongeAmperePP PROPERTIES PREFIX "")
+pybind11_add_module(MongeAmperePP SHARED MongeAmpere.cpp)
 
 ADD_SUBDIRECTORY(examples)
 ADD_SUBDIRECTORY(MongeAmpere)

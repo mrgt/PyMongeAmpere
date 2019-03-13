@@ -1,2 +1,8 @@
 *~
 *.pyc
+build/
+rel/
+.gdb_history
+*.orig
+rel/
+rel-py3/

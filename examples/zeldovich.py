@@ -1,3 +1,5 @@
+from builtins import range
+
 import sys
 sys.path.append('..');
 
@@ -17,7 +19,7 @@ nu = np.ones(N)/N;
 
 dt = 0.2
 t = dt
-for i in xrange(1,50):
+for i in range(1,50):
     print("ITERATION %d" % i)
     w = ma.optimal_transport_2(dens, Z, nu, verbose=True)
     C = dens.lloyd(Z, w)[0]

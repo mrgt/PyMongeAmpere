@@ -11,6 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import sys
 sys.path.append('..');
 
@@ -23,10 +24,10 @@ X = np.array([[-1,-1],
               [1, 1],
               [-1,1]], dtype=float);
 T = ma.delaunay_2(X,np.zeros(4));
-print T
+print(T)
 mu = np.ones(4)/4;
 dens = ma.Density_2(X,mu,T);
-print "mass=%g"%dens.mass()
+print("mass=%g"%dens.mass())
 
 # target is a random set of points, with random weights
 N = 1000;
